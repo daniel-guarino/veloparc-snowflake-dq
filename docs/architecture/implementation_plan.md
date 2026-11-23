@@ -54,7 +54,7 @@ veloparc-snowflake-dq/
 ├── README.md                  # architecture, how to run, DQ results
 ├── Makefile
 ├── pyproject.toml
-├── .github/workflows/         # ci.yml, deploy.yml, stream.yml
+├── .github/workflows/         # ci.yml, deploy.yml, generate.yml, stream.yml
 ├── docs/
 │   ├── architecture/          # ingestion_kafka_s3_bronze.md, diagrams
 │   ├── data-model/            # *.dbml, source→silver→gold mappings
@@ -68,7 +68,7 @@ veloparc-snowflake-dq/
 │   │   ├── anomalies/         # one injector per anomaly
 │   │   └── sink/              # Kafka producer + simulated broker: partitioner, envelope, file writer
 │   └── tests/
-├── connect/                   # docker compose + Kafka Connect S3 sink config (runs in WSL)
+├── connect/                   # S3 sink connector config for the managed Kafka Connect on Aiven
 ├── infra/
 │   ├── terraform/aws/         # bucket, IAM role, notifications
 │   └── snowflake/             # V001__rbac.sql, V002__storage.sql, ... (schemachange)
@@ -108,15 +108,17 @@ Reference volume: ~130 thousand shipments and close to 1 million events over 2 m
 
 ## Phase 3 · Kafka on Aiven + files
 
-Decision: real managed Kafka on Aiven (free plan) for the continuous sources, and files written straight to S3 for the history and for the sources that don't fit within the limits. The generator has code for every topic; only those the plan allows are connected to the broker. The S3 landing and everything downstream are the same on both paths.
+Decision: real managed Kafka on Aiven for the continuous sources, and files written straight to S3 for the history and for the sources that don't fit within the limits. The generator has code for every topic; only those the plan allows are connected to the broker. The S3 landing and everything downstream are the same on both paths.
 
-**Free-plan limits and how the case adapts** ([Aiven docs](https://aiven.io/docs/products/kafka/free-tier/kafka-free-tier), [changelog](https://aiven.io/changelog/6d8b5811-882e-4a87-a346-66fbca7ed709)):
+**Plan.** The service runs on Aiven's trial plan, without a credit card: managed Kafka Connect is available, and when the trial ends the service is powered off (never billed). The topology stays within the free-tier limits below, so a downgrade keeps the topics working; only Kafka Connect would be lost (fallback: self-hosted Connect, see alternatives). See ADR 0002.
+
+**Free-tier limits and how the case adapts** ([Aiven docs](https://aiven.io/docs/products/kafka/free-tier/kafka-free-tier), [changelog](https://aiven.io/changelog/6d8b5811-882e-4a87-a346-66fbca7ed709)):
 
 | Limit | Adaptation |
 | --- | --- |
 | Up to 5 topics, 2 partitions each | On Kafka: `vlp.shipping.veloship-shipment.v1`, `vlp.ops.tracking-event.v1`, `vlp.finance.invoice.v1`, `vlp.sales.crm-object.v1` and `vlp.dlq.s3-sink.v1`, all with 2 partitions |
 | 125 KiB/s produce and consume | 2-month backfill via files; Kafka only receives stream mode (one hour at a time, a few hundred KB) |
-| No Kafka Connect or managed integrations | Self-hosted Kafka Connect in Docker on WSL, consuming from Aiven and writing to S3 |
+| No Kafka Connect or managed integrations | Trial plan: managed Kafka Connect on Aiven with the Aiven S3 sink connector |
 | Fixed retention | Irrelevant: the S3 landing is the durable record |
 | One free service per organization; Schema Registry (Karapace) included | Register the 4 JSON Schemas with BACKWARD compatibility |
 
@@ -124,16 +126,17 @@ Decision: real managed Kafka on Aiven (free plan) for the continuous sources, an
 
 **Steps**
 
-1. Create an Aiven account and a Kafka service on the Free plan, in a European region, ideally the closest to Paris the plan offers. Download the CA and credentials into `.env`.
-2. Create the 5 topics with 2 partitions and register the schemas in Karapace.
+1. Aiven account and Kafka service in a European region (done). SASL enabled, a `vlp-generator` service user, Schema Registry (Karapace) enabled, Kafka Connect enabled with "Set up Kafka Connect". Credentials and CA go to the secrets of the GitHub Environment `dev`, never to a local `.env`.
+2. `veloparc-gen kafka-setup`, run by a GitHub Actions workflow, creates the 5 topics with 2 partitions (`message.timestamp.type=LogAppendTime`) and registers the schemas in Karapace.
 3. `topics.yaml` with a `transport: kafka | file` flag per topic. The generator gets `--sink kafka` using `confluent-kafka`: same key, same 13 headers, stable `ce_id`. For Kafka topics, partitions and offsets now come from the broker.
-4. On WSL, `docker compose` with Kafka Connect and Aiven's open-source S3 sink (Apache 2.0), configured with the `year=/month=/day=/hour=` layout, HoistField, InsertField and headers, and the DLQ pointing to `vlp.dlq.s3-sink.v1`. It only makes outbound connections (Aiven and S3), no open ports.
+4. Aiven S3 sink connector on the managed Kafka Connect, configured in `connect/s3_sink.json` with the `year=/month=/day=/hour=` layout, gzip, the envelope (HoistField, InsertField and headers) and the DLQ pointing to `vlp.dlq.s3-sink.v1`. It needs the S3 bucket and the connector's IAM credentials from Phase 4. Its default output (CSV, Base64 key and value, `<topic>-<partition>-<offset>` names) must be configured or the generator adapted (step 5).
 5. Confirm that the files written by the connector are loaded by the same pipes. If the envelope differs from what the generator writes in the backfill, adapt the generator to the connector, never the other way round.
 
 **Alternatives considered, not implemented:**
 
 - Openflow Kafka connector (on the Snowflake side), reading from Aiven via Snowpipe Streaming. It removes the local Kafka Connect, but skips the S3 landing, loses the 25 metadata columns and, on the trial, Openflow is limited to about 10 credits per day without a card.
-- Local Kafka on WSL: full topology (9 topics, designed partitions) and no throughput limit, but no managed broker.
+- Self-hosted Kafka Connect (Docker) consuming from Aiven: works on the free tier, but needs a machine running during the demo. Kept as the fallback if the trial ends.
+- Local Kafka: full topology (9 topics, designed partitions) and no throughput limit, but no managed broker.
 - Generator inside Snowflake (Snowpark stored procedure + internal stage): fallback plan if the AWS account is delayed.
 
 The generator's `sink/` module keeps simulating the broker for the backfill and the file-based topics, and must reproduce, in line with the ingestion page:
@@ -168,7 +171,7 @@ s3://vlp-dp-landing-dev-<suffix>/
 2. **Lifecycle:** `landing/` moves to Glacier Instant Retrieval after 90 days; `_generator/` expires after 30 days.
 3. **IAM role for Snowflake:** only `s3:GetObject`, `s3:GetObjectVersion` and `s3:ListBucket` on the `landing/` prefix, with a trust policy for the IAM user and the external ID Snowflake returns in `DESC INTEGRATION` (Phase 5). This step goes back and forth between Terraform and Snowflake: create the role with a temporary trust and update it later.
 4. **Notifications:** `s3:ObjectCreated:*` event on the `landing/kafka/` prefix to the SQS queue Snowflake shows in `SHOW PIPES` (`notification_channel`). One notification serves all pipes on the bucket.
-5. **Upload:** `make upload` runs `aws s3 sync out/landing s3://.../landing --size-only`. In `stream` mode, Kafka Connect writes the Kafka topics; the generator sends the file-based topics with `boto3` as soon as each file is closed.
+5. **Upload:** the `generate.yml` workflow (GitHub Actions, manual trigger with seed, window and countries) runs the backfill and `aws s3 sync out/landing s3://.../landing --size-only`, plus the manifests to `_generator/runs/<run_id>/`. In `stream` mode, Kafka Connect writes the Kafka topics; the generator sends the file-based topics with `boto3` as soon as each file is closed. Generator state (`offsets.json`, parcels in transit) lives in `s3://.../_generator/state/`, since runners are ephemeral.
 6. **Writer credentials:** separate credentials for the generator and for Kafka Connect, only `s3:PutObject` on `landing/*` (and `_generator/*` for the generator).
 
 Why store the anomaly manifest in S3: Phase 9 loads it into `DQ.ANOMALY_GROUND_TRUTH` and compares it with what the tests detected. It stays outside `landing/` so no pipe loads it as business data.
@@ -306,7 +309,7 @@ Orchestration stays inside Snowflake: Snowpipe loads bronze, one task validates 
 
 1. Deploy the dbt project as a `DBT PROJECT` object with `snow dbt deploy` (dbt Projects on Snowflake, GA since 6 Nov 2025). Fallback if you hit limitations: run `dbt build` in GitHub Actions.
 2. Task graph: `TASK_VALIDATE_BRONZE` (every 5 min, when the streams have data) → `TASK_DBT_BUILD` (`EXECUTE DBT PROJECT ... ARGS = 'build --select silver+ gold+ dq+'`, hourly).
-3. **Stream mode for the demo:** `stream.yml` workflow in GitHub Actions (cron every 15 minutes, switched on only on demo days) runs `make stream`. The generator publishes the next hour to the Aiven topics, Kafka Connect on WSL writes to S3, Snowpipe loads and the next task refreshes silver, gold and the scorecard. Kafka Connect must be running on the laptop during the demo.
+3. **Stream mode for the demo:** `stream.yml` workflow in GitHub Actions (cron every 15 minutes, switched on only on demo days) runs `make stream`. The generator publishes the next hour to the Aiven topics, the managed Kafka Connect writes to S3, Snowpipe loads and the next task refreshes silver, gold and the scorecard. Nothing runs on the maintainer's computer.
 4. Reprocessing: `make backfill FROM=... TO=...` rewrites a window and dbt runs with `--full-refresh` on the affected models.
 
 **CI/CD (GitHub Actions)**
@@ -315,10 +318,12 @@ Orchestration stays inside Snowflake: Snowpipe loads bronze, one task validates 
 | --- | --- | --- |
 | `ci.yml` | every PR | `ruff`, `sqlfluff lint`, generator `pytest`, validation of the examples against the schemas, `dbt build --select state:modified+` in a `CI_PR_<n>` schema with sample data, PR comment with the test summary |
 | `deploy.yml` | merge to `main` | `schemachange deploy` of the Snowflake scripts, `terraform apply` (with manual approval), `snow dbt deploy`, publishing `dbt docs` to GitHub Pages |
+| `generate.yml` | manual (`workflow_dispatch`) | backfill with the given seed, window and countries; uploads the landing and the manifests to S3 |
+| `kafka-setup.yml` | manual | creates the topics and registers the schemas in Karapace |
 | `stream.yml` | cron, off by default | generates and sends the next hour |
 | `cleanup.yml` | PR closed | `DROP SCHEMA CI_PR_<n>` |
 
-GitHub secrets: the `SVC_VELOPARC_CI` private key, the Snowflake account, the Aiven credentials and an AWS role assumed via OIDC (no stored access keys). For cheap CI, use `dbt build --empty` or a 1-day sample instead of the full backfill.
+GitHub secrets, in the Environment `dev` (only for workflows on `main` or manual triggers, never for PRs from forks): the `SVC_VELOPARC_CI` private key, the Snowflake account, the Aiven credentials and CA, and an AWS role assumed via OIDC (no stored access keys). For cheap CI, use `dbt build --empty` or a 1-day sample instead of the full backfill.
 
 ## Phase 11 · Documentation and demo
 
@@ -338,7 +343,7 @@ Also publish `dbt docs` on GitHub Pages, with lineage from bronze to gold.
 **Demo script (10 minutes)**
 
 1. Architecture and why (1 min): diagram, 8 sources, where each control sits.
-2. Data coming in (2 min): `make stream` or the cron switched on; message passing through Aiven, file appearing in S3, the pipe's `COPY_HISTORY`.
+2. Data coming in (2 min): `stream.yml` triggered by hand or the cron switched on; message passing through Aiven, file appearing in S3, the pipe's `COPY_HISTORY`.
 3. Bronze (1 min): one row with its metadata, the quarantine with a 12-digit GLN and the schema error.
 4. One rule end to end (3 min): positive credit notes → R9 test fails → R13 out of tolerance in one country → root cause in the billing batch → how you would talk to that country's data owner.
 5. Scorecard (2 min): data product × country × dimension, trend, precision and recall against the answer key.

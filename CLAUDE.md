@@ -22,16 +22,17 @@ Portfolio case: a data quality platform for the Sales & Finance data products of
 | `docs/data-model/source_to_silver_mapping.md` | Column-by-column source → silver mapping with Snowflake expressions, gaps and decisions |
 | `docs/data-model/silver_to_gold_mapping.md` | Silver → gold mapping, bus matrix, SCD rules, unknown members, gaps and decisions |
 | `generator/` | Data generator (Phase 2): `config/` (simulation, anomalies, topics), `src/veloparc_gen/`, `tests/`, README with how to run and trace anomalies |
-| `docs/adr/` | Architecture decision records (0001: CI/CD pipeline; Phase 0 decisions still to be written) |
+| `docs/adr/` | Architecture decision records (0001: CI/CD pipeline; 0002: managed Kafka Connect and execution in GitHub Actions; Phase 0 decisions still to be written) |
 | `Makefile`, `pyproject.toml`, `.pre-commit-config.yaml`, `.github/workflows/` | Tooling: `make setup lint test validate-contracts generate`; CI on PRs, merge on approval, deploy from main |
 
-Planned layout for code (create as phases progress): `connect/`, `infra/terraform/aws/`, `infra/snowflake/`, `dbt/veloparc/`, `apps/streamlit/`.
+Planned layout for code (create as phases progress): `connect/` (managed connector configs), `infra/terraform/aws/`, `infra/snowflake/`, `dbt/veloparc/`, `apps/streamlit/`.
 
 ## Key decisions already taken
 
 - **Region:** AWS `eu-west-3` (Paris) for S3 and Snowflake.
-- **Kafka:** Aiven free tier (max 5 topics × 2 partitions, 125 KiB/s, no managed Kafka Connect). On Kafka: shipments, tracking events, invoices, CRM, DLQ. Master data, tariffs, partner settlements and GL arrive as files in the same landing layout and envelope. `topics.yaml` has `transport: kafka | file` per topic.
-- **Kafka → S3:** self-hosted Kafka Connect (Docker on WSL) with Aiven's open-source S3 sink. 2-month backfill goes straight to S3 as files.
+- **Kafka:** Aiven, trial plan without a credit card (when the trial ends the service is powered off, never billed). Kept within the free-tier limits (5 topics × 2 partitions) so a downgrade keeps the topics working. On Kafka: shipments, tracking events, invoices, CRM, DLQ. Master data, tariffs, partner settlements and GL arrive as files in the same landing layout and envelope. `topics.yaml` has `transport: kafka | file` per topic.
+- **Kafka → S3:** managed Kafka Connect on Aiven (enabled with "Set up Kafka Connect") running the Aiven S3 sink connector; configuration versioned in `connect/`. 2-month backfill goes straight to S3 as files. ADR 0002.
+- **Execution:** nothing runs on the maintainer's computer. Everything that touches a cloud service (generator runs, Kafka setup, Terraform, Snowflake deploys, dbt) runs in GitHub Actions, with credentials as secrets of the GitHub Environment `dev`. Claude cloud sessions write and test code and trigger workflows, but hold no credentials (Kafka is not reachable through the session's HTTPS proxy). ADR 0002.
 - **Bronze:** outside dbt; one `RAW_*` table and one Snowpipe per topic, append-only, 25 metadata columns + `RAW_PAYLOAD VARIANT`. Invalid payloads go to `BRONZE.DQ_QUARANTINE`.
 - **dbt:** `stg_` views → incremental `silver` (merge) → `gold` star schema → `dq` models. Hash surrogate keys (`dbt_utils.generate_surrogate_key`). Unknown members = -1.
 - **Data quality:** each rule R1–R16 is a dbt test with `meta: {rule_id, dimension, owner}`; failures stored; `dq_issue`, `dq_scorecard_daily`, and `dq_detection_eval` comparing detections with the generator's `anomaly_manifest.jsonl` (precision/recall).
