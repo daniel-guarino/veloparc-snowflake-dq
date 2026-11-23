@@ -1,0 +1,65 @@
+{
+  "messageId": "6f1c2a9e-4b7d-4e2a-9c51-0d8e3f7a1b24",
+  "receivedAt": "2026-10-05T09:12:31Z",
+  "request": {
+    "Shipment": {
+      "ShipmentReference": [
+        "ORD-2026-118734"
+      ],
+      "ShippingDate": "2026-10-05",
+      "Product": "PARCEL",
+      "Middleware": "Shopify",
+      "Shipper": {
+        "ContactID": "351000123A"
+      },
+      "Consignee": {
+        "ConsigneeID": "CUST-88412",
+        "Address": {
+          "Name1": "Marta Ferreira",
+          "CountryCode": "PT",
+          "ZIPCode": "1050-094",
+          "City": "Lisboa",
+          "Street": "Avenida Fictícia",
+          "StreetNumber": "12"
+        }
+      },
+      "ShipmentUnit": [
+        {
+          "ShipmentUnitReference": [
+            "BOX-1"
+          ],
+          "Weight": 1.4,
+          "Service": [
+            {
+              "Service": {
+                "ServiceName": "service_flexible_delivery"
+              }
+            }
+          ]
+        },
+        {
+          "ShipmentUnitReference": [
+            "BOX-2"
+          ],
+          "Weight": 3.2
+        }
+      ]
+    }
+  },
+  "response": {
+    "CreatedShipment": {
+      "ParcelData": [
+        {
+          "TrackID": "ZK7Q2M9P",
+          "ParcelNumber": "05801234567",
+          "SSCC": "356012340000000017"
+        },
+        {
+          "TrackID": "ZK7Q2M9R",
+          "ParcelNumber": "05801234568",
+          "SSCC": "356012340000000024"
+        }
+      ]
+    }
+  }
+}
