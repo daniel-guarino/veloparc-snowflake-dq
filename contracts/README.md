@@ -83,7 +83,7 @@ O JSON Schema valida um objeto de cada vez. A coerência entre fontes tem de vir
 | Eventos repetidos com o mesmo trackId, estado e GLN | R4 | Unicidade |
 | `CANCELLED` depois de `PICKUP`; `DELIVERED` sem `IN_DELIVERY` | R3 | Consistência |
 | `recordTime` horas depois de `eventTime`; um país sem eventos num dia | R5 | Atualidade |
-| Lead com país "Spain" / "España" | normalização silver | Validade |
+| Lead com país fora de ISO 3166-1 alpha-2 ("Spain", "España", "Spian") | normalização silver (`LEAD_COUNTRY_ISO2`) | Validade |
 | Encomenda faturada sem `PICKUP`; entregue sem fatura | R2 | Consistência |
 | Notas de crédito com sinal positivo num país (receita 2 a 3% fora do razão) | R9, R13 | Exatidão |
 | Fatura de cliente que não existe no master data | R2 (gold: membro desconhecido) | Consistência |

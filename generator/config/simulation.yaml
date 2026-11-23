@@ -1,0 +1,138 @@
+# Veloparc simulation parameters (fictitious company). Volumes are totals across all configured countries;
+# running with fewer countries keeps only their share. Change `seed` to get a different, equally coherent world.
+seed: 20260901
+
+# Default window; the CLI options --from/--to override it.
+window:
+  start: 2026-09-01
+  end: 2026-10-31
+
+# Multiplies customers, shipments, opportunities and leads (1.0 = reference volume, ~140k shipments in 2 months).
+scale: 1.0
+
+countries:
+  PT:
+    currency: EUR
+    vat_rate_pct: 23
+    timezone: Europe/Lisbon
+    locale: pt_PT
+    gs1_company_prefix: "5601234"   # fictitious 7-digit GS1 company prefix
+    contact_id_prefix: "351"
+    postal_format: "####-###"
+    share: 0.20                     # share of customers (and so of volume)
+  ES:
+    currency: EUR
+    vat_rate_pct: 21
+    timezone: Europe/Madrid
+    locale: es_ES
+    gs1_company_prefix: "8401234"
+    contact_id_prefix: "34"
+    postal_format: "#####"
+    share: 0.25
+  DE:
+    currency: EUR
+    vat_rate_pct: 19
+    timezone: Europe/Berlin
+    locale: de_DE
+    gs1_company_prefix: "4001234"
+    contact_id_prefix: "49"
+    postal_format: "#####"
+    share: 0.35
+  PL:
+    currency: PLN
+    vat_rate_pct: 23
+    timezone: Europe/Warsaw
+    locale: pl_PL
+    gs1_company_prefix: "5901234"
+    contact_id_prefix: "48"
+    postal_format: "##-###"
+    share: 0.20
+
+network:
+  hubs_per_country: 3
+  depots_per_country: 20
+  parcelshops_per_country: 60       # split between PARCELSHOP and LOCKER
+  locker_share: 0.3
+  zones_per_country: 5              # zone = first digit of the postal code (see POSTAL_ZONE)
+  partners_per_country: 4           # every zone has exactly one partner (R16); some partners serve 2 zones
+
+customers:
+  count: 300
+  segments: {B2C_SHIPPER: 0.6, B2B_SHIPPER: 0.3, MARKETPLACE: 0.1}
+  two_versions_share: 0.10          # customers with a second master-data version inside the window
+  volume_pareto_shape: 1.3          # skew of shipment volume between customers
+  first_seen: 2026-01-01            # first master-data version and first tariff validity
+
+products:
+  mix: {PARCEL: 0.85, EXPRESS: 0.12, FREIGHT: 0.03}
+  second_product_share: 0.3         # customers with a second product enabled
+
+tariffs:
+  price_change_share: 0.10          # customer x product with a new tariff version on price_change_date
+  price_change_date: 2026-10-01
+  fuel_surcharge_pct: {min: 8.0, max: 15.0}
+  bands:
+    PARCEL: {limits_kg: [2, 5, 10, 30], base_price_eur: [4.20, 5.60, 7.40, 11.20]}
+    EXPRESS: {limits_kg: [2, 5, 10, 30], base_price_eur: [7.90, 9.50, 12.40, 17.80]}
+    FREIGHT: {limits_kg: [10, 20, 30], base_price_eur: [14.50, 19.90, 26.00]}
+  zone_factor: {Z1: 1.00, Z2: 1.05, Z3: 1.10, Z4: 1.15, Z5: 1.25}
+  customer_discount: {min: 0.0, max: 0.15}
+  remote_area_surcharge_eur: 0.60   # REMOTE_AREA surcharge on zone Z5
+
+crm:
+  opportunities: 400
+  leads: 1500
+  converted_lead_share: 0.25
+  closed_won_share: 0.40            # of opportunities; each Closed Won is linked to a customer
+  history_start: 2026-03-01
+
+shipments:
+  per_working_day: 3000
+  weekend_factor: 0.20
+  peaks:
+    - {date: 2026-11-27, factor: 2.5}   # Black Friday: only applies when the window includes it
+  parcels_per_shipment: {1: 0.70, 2: 0.20, 3: 0.05, 4: 0.03, 5: 0.02}
+  max_weight_kg: 30.0
+  weight_kg:                        # log-normal per product
+    PARCEL: {median: 1.5, sigma: 0.9}
+    EXPRESS: {median: 1.2, sigma: 0.8}
+    FREIGHT: {median: 12.0, sigma: 0.5}
+  cancelled_share: 0.01             # DATA_RECEIVED -> CANCELLED, never picked up nor invoiced
+  shop_delivery_share: 0.05         # delivered to a ParcelShop/locker instead of the door
+  business_hours_local: {start: 7, end: 20}
+
+tracking:
+  delivery_mix: {d1: 0.92, d2: 0.06, not_delivered_first: 0.02}
+  hubs_per_parcel: {1: 0.5, 2: 0.35, 3: 0.15}
+  record_delay_seconds: {median: 20, sigma: 1.0, max: 600}   # R5: recordTime seconds to minutes after eventTime
+  max_normal_delay_minutes: 15      # R5 threshold used by the rule checker
+
+invoicing:
+  issue_day: 2                      # invoices of month M are issued on day 2 of M+1
+  max_lines_per_invoice: 5000       # schema maxItems; larger invoices are split
+  credit_note_invoice_share: 0.05
+  credit_note_line_share: 0.25
+  credit_note_delay_days: {min: 3, max: 10}
+
+fx:
+  # EUR per unit of currency (netAmount x fxRateToEur = EUR), daily random walk
+  PLN: {start: 0.2330, daily_sigma: 0.0025}
+
+settlements:
+  cost_per_stop:                    # in the partner's currency (schema maximum: 10)
+    EUR: {min: 1.80, max: 3.20}
+    PLN: {min: 6.50, max: 9.50}
+  parcels_per_stop: {min: 1.10, max: 1.40}
+  issue_delay_days: 3               # settlement for month M arrives on day 3 of M+1
+
+gl:
+  issue_delay_days: 15              # GL extract for month M arrives on day 15 of M+1, after the credit notes
+
+sink:
+  flush_size: 5000                  # max messages per landing file
+  arrival_delay_seconds: {min: 1, max: 8}   # LogAppendTime after the source timestamp
+  initial_load_offset_minutes: 5    # snapshot of data older than the window lands at window start + this
+  # Only on transport=kafka topics (what the real connector / producer would do):
+  connector_redelivery_file_rate: 0.002   # a file re-written from an earlier offset (same offsets, same ce_id)
+  producer_retry_rate: 0.0005             # same message produced twice (new offset, same ce_id)
+  dlq_rate: 0.0002                        # a truncated copy of a message goes to the DLQ (the good copy still lands)

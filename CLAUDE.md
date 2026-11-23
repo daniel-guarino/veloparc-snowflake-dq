@@ -21,10 +21,11 @@ Portfolio case: a data quality platform for the Sales & Finance data products of
 | `docs/data-model/silver_model.dbml`, `gold_star_schema.dbml` | Silver and gold (star schema) models |
 | `docs/data-model/source_to_silver_mapping.md` | Column-by-column source → silver mapping with Snowflake expressions, gaps and decisions |
 | `docs/data-model/silver_to_gold_mapping.md` | Silver → gold mapping, bus matrix, SCD rules, unknown members, gaps and decisions |
+| `generator/` | Data generator (Phase 2): `config/` (simulation, anomalies, topics), `src/veloparc_gen/`, `tests/`, README with how to run and trace anomalies |
 | `docs/adr/` | Architecture decision records (0001: CI/CD pipeline; Phase 0 decisions still to be written) |
 | `Makefile`, `pyproject.toml`, `.pre-commit-config.yaml`, `.github/workflows/` | Tooling: `make setup lint test validate-contracts generate`; CI on PRs, merge on approval, deploy from main |
 
-Planned layout for code (create as phases progress): `generator/`, `connect/`, `infra/terraform/aws/`, `infra/snowflake/`, `dbt/veloparc/`, `apps/streamlit/`.
+Planned layout for code (create as phases progress): `connect/`, `infra/terraform/aws/`, `infra/snowflake/`, `dbt/veloparc/`, `apps/streamlit/`.
 
 ## Key decisions already taken
 
