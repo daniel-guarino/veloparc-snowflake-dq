@@ -18,7 +18,7 @@ Convenção `vlp.<domínio>.<dataset>.v<major>`. Todos: RF=3, min.insync.replica
 
 Schema Registry com compatibilidade BACKWARD mas sem validação estrita no produtor: as anomalias do case têm de chegar à bronze.
 
-> Implementação no case: no free tier da Aiven só os tópicos de shipments, tracking events, invoices, CRM e a DLQ passam pelo Kafka (2 partições cada). Master data, tarifas, liquidações e GL chegam como ficheiros no mesmo layout e envelope. Ver `implementation_plan.md`, Phase 3.
+> Implementação no case: dentro dos limites do free tier da Aiven, só os tópicos de shipments, tracking events, invoices, CRM e a DLQ passam pelo Kafka (2 partições cada). Master data, tarifas, liquidações e GL chegam como ficheiros no mesmo layout e envelope. O Kafka Connect é o gerido pela Aiven (plano trial), com o S3 sink da Aiven. Ver `implementation_plan.md`, Phase 3, e ADR 0002.
 
 ## Headers obrigatórios
 
