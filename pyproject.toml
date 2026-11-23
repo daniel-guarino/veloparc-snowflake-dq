@@ -45,6 +45,9 @@ ignore = [
     "S311", # pseudo-random generators are the point of a data generator
 ]
 
+[tool.ruff.lint.isort]
+known-first-party = ["veloparc_gen"]
+
 [tool.ruff.lint.per-file-ignores]
 "generator/tests/**" = ["S101"]
 
