@@ -1,0 +1,62 @@
+# Delivery to main: when the owner approves a PR (or labels it `ready-to-merge`, since GitHub does not let
+# authors approve their own PRs), re-run the full checks on the PR merged with the latest main, merge it
+# and start the deploy pipeline. See docs/adr/0001-ci-cd-pipeline.md.
+name: merge-on-approval
+
+on:
+  pull_request_review:
+    types: [submitted]
+  pull_request:
+    types: [labeled]
+
+permissions: {}
+
+concurrency:
+  group: merge-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  gate:
+    name: approval gate
+    runs-on: ubuntu-latest
+    # Same-repo PRs to main only; approvals from maintainers or the label set by the repository owner.
+    if: >-
+      github.event.pull_request.base.ref == 'main' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      (
+        (github.event_name == 'pull_request_review' &&
+         github.event.review.state == 'approved' &&
+         contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.review.author_association)) ||
+        (github.event_name == 'pull_request' &&
+         github.event.label.name == 'ready-to-merge' &&
+         github.event.sender.login == github.repository_owner)
+      )
+    steps:
+      - run: echo "PR #${{ github.event.pull_request.number }} approved by ${{ github.event.sender.login }}"
+
+  verify:
+    name: verify merge result
+    needs: gate
+    permissions:
+      contents: read
+    uses: ./.github/workflows/ci.yml
+
+  merge:
+    name: merge and deploy
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write        # dispatch deploy.yml (merges made with GITHUB_TOKEN do not trigger push workflows)
+      contents: write       # merge
+      pull-requests: write  # merge and delete the head branch
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PR: ${{ github.event.pull_request.number }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - name: Merge (keeps the Conventional Commits history)
+        # --match-head-commit: refuse if commits were pushed after the approval.
+        run: gh pr merge "$PR" --repo "$GITHUB_REPOSITORY" --merge --delete-branch --match-head-commit "$HEAD_SHA"
+
+      - name: Start deploy pipeline on main
+        run: gh workflow run deploy.yml --repo "$GITHUB_REPOSITORY" --ref main
