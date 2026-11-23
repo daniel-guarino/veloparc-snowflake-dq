@@ -193,6 +193,7 @@ class Topic(_Model):
 
 
 class Anomaly(_Model):
+    eligible: str | None = None
     rule: str
     dq_dimension: str
     source: str
