@@ -1,0 +1,122 @@
+# One injector per row of the anomalies table in contracts/README.md. Injected after the coherent world is
+# built; every injected anomaly is a line in anomaly_manifest.jsonl (the answer key for Phase 9).
+#
+# rate   share of the eligible records that get the anomaly: exactly round(rate x eligible) are picked
+# count  fixed number of occurrences (for anomalies that are not per record)
+# schema_anomaly  true = the broken record must FAIL its JSON Schema (it goes to quarantine in bronze);
+#                 false = it must still PASS the schema (only a business rule catches it)
+enabled: true
+
+anomalies:
+  gln_12_digits:
+    rule: SCHEMA
+    dq_dimension: Validity
+    source: tracking_event
+    schema_anomaly: true
+    rate: 0.001
+    description: bizLocation.gln truncated to 12 digits on a HUB scan
+  status_deliverd:
+    rule: SCHEMA
+    dq_dimension: Validity
+    source: tracking_event
+    schema_anomaly: true
+    rate: 0.002
+    description: status DELIVERED misspelled as DELIVERD
+  credit_note_without_related:
+    rule: SCHEMA
+    dq_dimension: Completeness
+    source: invoice
+    schema_anomaly: true
+    rate: 0.10
+    description: credit note without relatedInvoiceNumber
+  shipment_extra_unit:
+    rule: R1
+    dq_dimension: Completeness
+    source: veloship_shipment
+    schema_anomaly: false
+    rate: 0.01
+    description: request has one more ShipmentUnit than the TrackIDs in the response
+  repeated_event:
+    rule: R4
+    dq_dimension: Uniqueness
+    source: tracking_event
+    schema_anomaly: false
+    rate: 0.005
+    description: scan repeated with the same trackId, status and GLN (new eventId)
+  cancelled_after_pickup:
+    rule: R3
+    dq_dimension: Consistency
+    source: tracking_event
+    schema_anomaly: false
+    rate: 0.003
+    description: CANCELLED scan after PICKUP
+  delivered_without_in_delivery:
+    rule: R3
+    dq_dimension: Consistency
+    source: tracking_event
+    schema_anomaly: false
+    rate: 0.003
+    description: IN_DELIVERY scan missing before DELIVERED
+  late_record_time:
+    rule: R5
+    dq_dimension: Timeliness
+    source: tracking_event
+    schema_anomaly: false
+    rate: 0.002
+    description: recordTime hours after eventTime
+  country_day_outage:
+    rule: R5
+    dq_dimension: Timeliness
+    source: tracking_event
+    schema_anomaly: false
+    count: 1
+    description: every scan of one country and day arrives the next morning (scanner gateway outage)
+  lead_country_not_iso2:
+    rule: LEAD_COUNTRY_ISO2
+    dq_dimension: Validity
+    source: crm_object
+    schema_anomaly: false
+    rate: 0.02
+    description: lead Country is not an ISO 3166-1 alpha-2 code (e.g. Spain, España)
+  invoiced_without_pickup:
+    rule: R2
+    dq_dimension: Consistency
+    source: invoice
+    schema_anomaly: false
+    rate: 0.10
+    description: cancelled parcel (never picked up) billed on the customer's invoice
+  delivered_without_invoice:
+    rule: R2
+    dq_dimension: Consistency
+    source: invoice
+    schema_anomaly: false
+    rate: 0.001
+    description: delivered parcel missing from the customer's invoice
+  positive_credit_notes:
+    rule: R9
+    dq_dimension: Accuracy
+    source: invoice
+    schema_anomaly: false
+    count: 1
+    description: every credit note of one country and month sent with positive amounts (ledger off by 2-3%, R13)
+  unknown_customer_invoice:
+    rule: R2
+    dq_dimension: Consistency
+    source: invoice
+    schema_anomaly: false
+    rate: 0.015
+    description: invoice for a contactId that does not exist in master data (gold unknown member)
+  overlapping_tariff:
+    rule: R14
+    dq_dimension: Consistency
+    source: tariff
+    schema_anomaly: false
+    rate: 0.01
+    description: new tariff version whose validity overlaps the open version
+  settlement_count_mismatch:
+    rule: R11
+    dq_dimension: Accuracy
+    source: partner_settlement
+    schema_anomaly: false
+    rate: 0.05
+    description: settlement deliveredParcels differs from the DELIVERED scans of the partner, zone and month
