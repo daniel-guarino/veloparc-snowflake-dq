@@ -14,6 +14,7 @@ import re
 import tempfile
 import urllib.request
 from pathlib import Path
+from urllib.parse import unquote, urlsplit, urlunsplit
 
 REQUIRED = (
     "KAFKA_BOOTSTRAP_SERVERS",
@@ -62,27 +63,70 @@ def kafka_config(env: dict[str, str] | None = None, ca_dir: Path | None = None) 
     }
 
 
-def schema_registry_get(path: str, env: dict[str, str] | None = None, timeout: float = 15.0):
+def schema_registry_endpoint(env: dict[str, str] | None = None) -> tuple[str, str]:
+    """(base URL, user:password) for the Schema Registry.
+
+    Accepts what people paste from the Aiven console: surrounding spaces or quotes, no scheme, a trailing
+    slash, or the full Service URI with the user and password embedded before the host."""
     env = dict(os.environ if env is None else env)
-    url, auth = env.get("SCHEMA_REGISTRY_URL", "").rstrip("/"), env.get("SCHEMA_REGISTRY_BASIC_AUTH", "")
-    if not url or ":" not in auth:
-        raise MissingSettings("SCHEMA_REGISTRY_URL and SCHEMA_REGISTRY_BASIC_AUTH (user:password) are required")
-    request = urllib.request.Request(url + path)  # noqa: S310 (https URL from configuration)
-    request.add_header("Authorization", "Basic " + base64.b64encode(auth.strip().encode()).decode())
+    raw = env.get("SCHEMA_REGISTRY_URL", "").strip().strip("\"'").strip()
+    if not raw:
+        raise MissingSettings("SCHEMA_REGISTRY_URL is required")
+    if "://" not in raw:
+        raw = "https://" + raw
+    parts = urlsplit(raw)
+    if not parts.hostname:
+        raise MissingSettings(f"SCHEMA_REGISTRY_URL has no host ({describe_url(raw)})")
+    url_auth = ""
+    if parts.username:
+        url_auth = f"{unquote(parts.username)}:{unquote(parts.password or '')}"
+    netloc = parts.hostname + (f":{parts.port}" if parts.port else "")
+    base = urlunsplit((parts.scheme or "https", netloc, parts.path.rstrip("/"), "", ""))
+    auth = env.get("SCHEMA_REGISTRY_BASIC_AUTH", "").strip() or url_auth
+    if ":" not in auth:
+        raise MissingSettings("SCHEMA_REGISTRY_BASIC_AUTH must be user:password (or put them in the URL)")
+    return base, auth
+
+
+def describe_url(raw: str) -> str:
+    """Shape of a URL without its values, safe to print in CI logs."""
+    raw = raw.strip()
+    parts = urlsplit(raw if "://" in raw else "https://" + raw)
+    return (
+        f"scheme={'yes' if '://' in raw else 'missing'}, credentials_in_url={'yes' if parts.username else 'no'}, "
+        f"port={'yes' if parts.port else 'missing'}, "
+        f"whitespace_inside={'yes' if any(c.isspace() for c in raw) else 'no'}, "
+        f"aiven_host={'yes' if (parts.hostname or '').endswith('.aivencloud.com') else 'no'}"
+    )
+
+
+def schema_registry_get(path: str, env: dict[str, str] | None = None, timeout: float = 15.0):
+    base, auth = schema_registry_endpoint(env)
+    request = urllib.request.Request(base + path)  # noqa: S310 (https URL from configuration)
+    request.add_header("Authorization", "Basic " + base64.b64encode(auth.encode()).decode())
     with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310
         return json.loads(response.read())
 
 
 def check(timeout: float = 20.0) -> dict:
-    """Connects to the broker and the Schema Registry; returns what it could see (no secret values)."""
+    """Connects to the broker and to the Schema Registry separately and reports each (no secret values)."""
     from confluent_kafka.admin import AdminClient
 
-    admin = AdminClient(kafka_config())
-    metadata = admin.list_topics(timeout=timeout)
-    topics = sorted(t for t in metadata.topics if not t.startswith("_") and not t.startswith("__"))
-    subjects = schema_registry_get("/subjects")
-    return {
-        "brokers": len(metadata.brokers),
-        "topics": {t: len(metadata.topics[t].partitions) for t in topics},
-        "schema_registry_subjects": sorted(subjects),
-    }
+    result: dict = {"kafka": {"ok": False}, "schema_registry": {"ok": False}}
+    try:
+        metadata = AdminClient(kafka_config()).list_topics(timeout=timeout)
+        topics = sorted(t for t in metadata.topics if not t.startswith("_"))
+        result["kafka"] = {
+            "ok": True,
+            "brokers": len(metadata.brokers),
+            "topics": {t: len(metadata.topics[t].partitions) for t in topics},
+        }
+    except Exception as exc:
+        result["kafka"]["error"] = f"{type(exc).__name__}: {exc}"
+    try:
+        subjects = schema_registry_get("/subjects", timeout=timeout)
+        result["schema_registry"] = {"ok": True, "subjects": sorted(subjects)}
+    except Exception as exc:
+        result["schema_registry"]["error"] = f"{type(exc).__name__}: {exc}"
+        result["schema_registry"]["url_shape"] = describe_url(os.environ.get("SCHEMA_REGISTRY_URL", ""))
+    return result

@@ -87,9 +87,14 @@ def kafka_check() -> None:
         typer.secho(str(exc), fg=typer.colors.RED, err=True)
         raise typer.Exit(code=1) from exc
     typer.echo(json.dumps(result, indent=2))
+    failed = [name for name, part in result.items() if not part["ok"]]
+    if failed:
+        typer.secho(f"FAILED: {', '.join(failed)}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1)
+    kafka = result["kafka"]
     typer.echo(
-        f"OK: {result['brokers']} broker(s), {len(result['topics'])} topic(s), "
-        f"{len(result['schema_registry_subjects'])} schema subject(s)"
+        f"OK: {kafka['brokers']} broker(s), {len(kafka['topics'])} topic(s), "
+        f"{len(result['schema_registry']['subjects'])} schema subject(s)"
     )
 
 

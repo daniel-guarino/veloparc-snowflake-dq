@@ -32,3 +32,33 @@ def test_kafka_config_writes_private_ca(tmp_path):
 def test_missing_settings_are_named_without_values():
     with pytest.raises(MissingSettings, match="KAFKA_SASL_PASSWORD"):
         kafka_config({"KAFKA_BOOTSTRAP_SERVERS": "x:1"})
+
+
+URI_ESCAPED = "https://avnadmin:s3cr%40t@sr.example.test:443"  # pragma: allowlist secret
+URI_WITH_USER = "https://avnadmin:x@sr.example.test:443"  # pragma: allowlist secret
+BASE = "https://sr.example.test:443"
+
+
+@pytest.mark.parametrize(
+    ("pasted", "auth_secret", "base", "auth"),
+    [
+        (BASE, "u:p", BASE, "u:p"),
+        ("  sr.example.test:443/ \n", "u:p", BASE, "u:p"),
+        ('"https://sr.example.test:443"', "u:p", BASE, "u:p"),
+        (URI_ESCAPED, "", BASE, "avnadmin:s3cr@t"),
+        (URI_WITH_USER, "u:p", BASE, "u:p"),
+    ],
+)
+def test_schema_registry_endpoint_accepts_console_formats(pasted, auth_secret, base, auth):
+    from veloparc_gen.kafka_conn import schema_registry_endpoint
+
+    env = {"SCHEMA_REGISTRY_URL": pasted, "SCHEMA_REGISTRY_BASIC_AUTH": auth_secret}
+    assert schema_registry_endpoint(env) == (base, auth)
+
+
+def test_describe_url_hides_values():
+    from veloparc_gen.kafka_conn import describe_url
+
+    shape = describe_url("https://avnadmin:topsecret@sr.example.test:443")  # pragma: allowlist secret
+    assert "topsecret" not in shape and "example" not in shape
+    assert "credentials_in_url=yes" in shape
