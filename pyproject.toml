@@ -6,6 +6,7 @@ readme = "generator/README.md"
 license = "MIT"
 requires-python = ">=3.12,<3.13"
 dependencies = [
+    "confluent-kafka==2.16.2",
     "faker==40.63.0",
     "jsonschema[format]==4.26.0",
     "numpy==2.5.5",

@@ -74,5 +74,24 @@ def backfill(
         raise typer.Exit(code=2)
 
 
+@app.command("kafka-check")
+def kafka_check() -> None:
+    """Connect to Aiven Kafka and the Schema Registry with the credentials in the environment."""
+    import json
+
+    from veloparc_gen.kafka_conn import MissingSettings, check
+
+    try:
+        result = check()
+    except MissingSettings as exc:
+        typer.secho(str(exc), fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(json.dumps(result, indent=2))
+    typer.echo(
+        f"OK: {result['brokers']} broker(s), {len(result['topics'])} topic(s), "
+        f"{len(result['schema_registry_subjects'])} schema subject(s)"
+    )
+
+
 if __name__ == "__main__":
     app()

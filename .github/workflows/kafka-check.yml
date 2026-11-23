@@ -1,0 +1,39 @@
+# Manual connectivity check: Aiven Kafka (SASL_SSL) and Schema Registry, with the secrets of Environment dev.
+# Prints broker, topic and schema subject counts only; secret values are masked by GitHub and never printed.
+name: kafka-check
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kafka-check
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: check Kafka and Schema Registry
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: dev
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - uses: astral-sh/setup-uv@v10.4.0
+        with:
+          enable-cache: true
+
+      - name: Install pinned dependencies
+        run: uv sync --frozen --no-dev
+
+      - name: Connect
+        env:
+          KAFKA_BOOTSTRAP_SERVERS: ${{ secrets.KAFKA_BOOTSTRAP_SERVERS }}
+          KAFKA_SASL_USERNAME: ${{ secrets.KAFKA_SASL_USERNAME }}
+          KAFKA_SASL_PASSWORD: ${{ secrets.KAFKA_SASL_PASSWORD }}
+          KAFKA_SSL_CA_PEM: ${{ secrets.KAFKA_SSL_CA_PEM }}
+          SCHEMA_REGISTRY_URL: ${{ secrets.SCHEMA_REGISTRY_URL }}
+          SCHEMA_REGISTRY_BASIC_AUTH: ${{ secrets.SCHEMA_REGISTRY_BASIC_AUTH }}
+        run: uv run --no-dev veloparc-gen kafka-check
