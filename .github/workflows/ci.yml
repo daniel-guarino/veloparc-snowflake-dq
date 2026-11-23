@@ -37,6 +37,7 @@ jobs:
         run: make lint
 
       - name: Test
+        timeout-minutes: 10
         run: make test
 
       - name: Validate contracts

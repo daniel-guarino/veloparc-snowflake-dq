@@ -11,6 +11,7 @@ import json
 import multiprocessing
 import os
 from collections import Counter
+from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass, field
 
 from jsonschema import Draft202012Validator, FormatChecker
@@ -81,8 +82,12 @@ def _check_slice(task: tuple[str, int, int, int]) -> tuple[str, int, int, list[s
     return source, checked, expected_invalid, failures
 
 
+PARALLEL_THRESHOLD = 200_000  # below this many records, forking costs more than it saves
+
+
 def validate_world(world: World, max_failures: int = 20, workers: int | None = None) -> ValidationReport:
-    """Validates every live record. Large sources are split across forked worker processes (POSIX only)."""
+    """Validates every live record. Large worlds are split across forked worker processes (POSIX only); a worker
+    that dies raises BrokenProcessPool instead of hanging the run."""
     global _WORLD
     sources = [s for s in world.records if s in SchemaValidator(world).validators]
     chunk = 50_000
@@ -91,12 +96,15 @@ def validate_world(world: World, max_failures: int = 20, workers: int | None = N
         for source in sources
         for start in range(0, len(world.records[source]), chunk)
     ]
-    workers = workers if workers is not None else min(8, os.cpu_count() or 1)
+    total = sum(len(world.records[source]) for source in sources)
+    if workers is None:
+        workers = min(8, os.cpu_count() or 1) if total >= PARALLEL_THRESHOLD else 1
     _WORLD = world
     try:
         if workers > 1 and len(tasks) > 1 and "fork" in multiprocessing.get_all_start_methods():
-            with multiprocessing.get_context("fork").Pool(workers) as pool:
-                results = pool.map(_check_slice, tasks)
+            context = multiprocessing.get_context("fork")
+            with ProcessPoolExecutor(max_workers=workers, mp_context=context) as pool:
+                results = list(pool.map(_check_slice, tasks))
         else:
             results = [_check_slice(task) for task in tasks]
     finally:
