@@ -1,0 +1,48 @@
+# Manual: create/align the Kafka topics, the producer ACL and the JSON Schemas on Aiven (idempotent).
+name: kafka-setup
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kafka-setup
+  cancel-in-progress: false
+
+jobs:
+  setup:
+    name: topics, ACL and schemas
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: dev
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - uses: astral-sh/setup-uv@v10.4.0
+        with:
+          enable-cache: true
+
+      - name: Install pinned dependencies
+        run: uv sync --frozen --no-dev
+
+      - name: Kafka setup
+        env:
+          AIVEN_API_TOKEN: ${{ secrets.AIVEN_API_TOKEN }}
+          AIVEN_PROJECT: ${{ vars.AIVEN_PROJECT }}
+          AIVEN_SERVICE: ${{ vars.AIVEN_SERVICE }}
+          KAFKA_GENERATOR_USER: ${{ vars.KAFKA_GENERATOR_USER }}
+          SCHEMA_REGISTRY_URL: ${{ secrets.SCHEMA_REGISTRY_URL }}
+          SCHEMA_REGISTRY_BASIC_AUTH: ${{ secrets.SCHEMA_REGISTRY_BASIC_AUTH }}
+        run: uv run --no-dev veloparc-gen kafka-setup
+
+      - name: Check
+        env:
+          KAFKA_BOOTSTRAP_SERVERS: ${{ secrets.KAFKA_BOOTSTRAP_SERVERS }}
+          KAFKA_SASL_USERNAME: ${{ secrets.KAFKA_SASL_USERNAME }}
+          KAFKA_SASL_PASSWORD: ${{ secrets.KAFKA_SASL_PASSWORD }}
+          KAFKA_SSL_CA_PEM: ${{ secrets.KAFKA_SSL_CA_PEM }}
+          SCHEMA_REGISTRY_URL: ${{ secrets.SCHEMA_REGISTRY_URL }}
+          SCHEMA_REGISTRY_BASIC_AUTH: ${{ secrets.SCHEMA_REGISTRY_BASIC_AUTH }}
+        run: uv run --no-dev veloparc-gen kafka-check

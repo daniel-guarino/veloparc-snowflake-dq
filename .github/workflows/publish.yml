@@ -1,0 +1,72 @@
+# Manual: generate a window and publish what arrives in it. Kafka topics go to Aiven (as the generator's
+# service user); file-based topics and the manifests are kept as a workflow artifact until the internal stage
+# exists (Phase 3d). Use dry_run to test without touching Kafka.
+name: publish
+
+on:
+  workflow_dispatch:
+    inputs:
+      from:
+        description: First day (YYYY-MM-DD)
+        required: true
+        default: "2026-11-01"
+      to:
+        description: Last day (YYYY-MM-DD)
+        required: true
+        default: "2026-11-01"
+      countries:
+        description: Comma-separated country codes
+        required: true
+        default: PT,ES,DE,PL
+      dry_run:
+        description: Simulate the producer (nothing is sent to Kafka)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: publish ${{ inputs.from }} to ${{ inputs.to }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: dev
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - uses: astral-sh/setup-uv@v10.4.0
+        with:
+          enable-cache: true
+
+      - name: Install pinned dependencies
+        run: uv sync --frozen --no-dev
+
+      - name: Publish
+        env:
+          KAFKA_BOOTSTRAP_SERVERS: ${{ secrets.KAFKA_BOOTSTRAP_SERVERS }}
+          KAFKA_SASL_USERNAME: ${{ secrets.KAFKA_SASL_USERNAME }}
+          KAFKA_SASL_PASSWORD: ${{ secrets.KAFKA_SASL_PASSWORD }}
+          KAFKA_SSL_CA_PEM: ${{ secrets.KAFKA_SSL_CA_PEM }}
+          FROM: ${{ inputs.from }}
+          TO: ${{ inputs.to }}
+          COUNTRIES: ${{ inputs.countries }}
+          DRY_RUN: ${{ inputs.dry_run && '--dry-run' || '--no-dry-run' }}
+        run: |
+          uv run --no-dev veloparc-gen publish --from "$FROM" --to "$TO" --countries "$COUNTRIES" \
+            --out out --state-dir state $DRY_RUN
+
+      - name: Keep manifests and file-based topics
+        if: always()
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: publish-${{ inputs.from }}-${{ inputs.to }}
+          path: |
+            out/
+            state/
+          if-no-files-found: ignore
+          retention-days: 30
