@@ -164,11 +164,19 @@ erDiagram
 | `contracts/README.md` | Generation order, cross-source rules R1–R16, anomalies to inject |
 | `docs/architecture/` | Ingestion design (Kafka → S3 → bronze) and the phase-by-phase implementation plan |
 | `docs/data-model/` | Silver and gold models (DBML) and column-level mappings |
+| `docs/adr/` | Architecture decision records |
+| `Makefile`, `pyproject.toml`, `.github/workflows/` | Tooling (uv, ruff, pytest, pre-commit) and CI/CD |
+
+## Development
+
+Requires [uv](https://docs.astral.sh/uv/) (it installs Python 3.12 and the pinned dependencies).
 
 ```bash
-pip install "jsonschema[format]"
-python contracts/validate_examples.py
+make setup                 # uv sync + git hooks
+make lint test validate-contracts
 ```
+
+Every PR runs the same checks in CI. Approving a PR (or labelling it `ready-to-merge`) re-verifies it against the latest `main`, merges it and starts the deploy pipeline: see [ADR 0001](docs/adr/0001-ci-cd-pipeline.md).
 
 Next: the data generator (`generator/`), infrastructure (`infra/`) and the dbt project (`dbt/`). See [`docs/architecture/implementation_plan.md`](docs/architecture/implementation_plan.md).
 
