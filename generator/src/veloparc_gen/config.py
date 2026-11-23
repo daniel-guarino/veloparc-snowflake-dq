@@ -190,6 +190,9 @@ class Topic(_Model):
     schema_file: str | None = Field(alias="schema")
     producer: str
     entity: str
+    cleanup_policy: str = "delete"
+    retention_hours: int | None = None
+    max_message_bytes: int | None = None
 
 
 class Anomaly(_Model):

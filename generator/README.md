@@ -24,6 +24,19 @@ Other options: `--seed`, `--scale 0.1` (a tenth of the volume), `--no-anomalies`
 The reference run takes about 4 minutes on a 4-core laptop. It produces ~141k shipments, ~1.18M scans and ~5.5k
 files (210 MB). The same seed and configuration always produce byte-identical files.
 
+## Kafka (Aiven): setup and publish
+
+These run in GitHub Actions only (ADR 0002), with the secrets and variables of the Environment `dev`:
+
+| Workflow | Command | What it does |
+| --- | --- | --- |
+| `kafka-check` | `veloparc-gen kafka-check` | Connects to the broker and the Schema Registry; prints counts only |
+| `kafka-setup` | `veloparc-gen kafka-setup` | Through the Aiven API: creates the 5 Kafka topics (2 partitions, `LogAppendTime`, retention from `topics.yaml`), gives `write` to the generator's user, registers the 4 JSON Schemas as `<topic>-value` (BACKWARD). Idempotent |
+| `publish` | `veloparc-gen publish --from --to --countries` | Generates the window and publishes what *arrives* in it. Kafka topics go to Aiven (same key, the 13 headers, `murmur2` partitioning as the Java client, plus producer retries and truncated DLQ copies at the sink rates); file-based topics are written as landing files. Snapshot records (`op R`) are left to the backfill. The anomaly manifest points to the real partition and offset |
+
+Intended use: `make generate` for the history as files (Sep–Oct), then `publish` for the following days through
+Kafka. `--dry-run` simulates the producer locally (also used by the tests).
+
 ## Output
 
 ```text
@@ -91,6 +104,6 @@ Otherwise the CLI exits with an error.
 | Rule check | `rules.py` | R1–R16 and `LEAD_COUNTRY_ISO2` in Python, over the records that pass their schema (what silver sees) |
 | Sink | `sink/` | murmur2 partitioner, offsets in `state/`, LogAppendTime, envelope with 13 headers, rotation per hour/day or `flush_size`; on `kafka` topics only: file redelivery, producer retries (same `ce_id`) and truncated copies sent to `vlp.dlq.s3-sink.v1` |
 
-Scope notes: shipments are domestic only (GL account 700200 is always 0). Only `backfill` mode exists so far;
-`stream` mode arrives with Phase 3. The Black Friday peak is configured, but only applies when the window
-includes 2026-11-27.
+Scope notes: shipments are domestic only (GL account 700200 is always 0). `publish` covers a whole window in one
+run; an hourly `stream` mode that continues from saved state is left for Phase 10. The Black Friday peak is
+configured, but only applies when the window includes 2026-11-27.

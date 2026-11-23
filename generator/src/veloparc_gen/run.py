@@ -11,12 +11,15 @@ State (state_dir): offsets.json with the next offset per topic and partition.
 
 from __future__ import annotations
 
+import copy
 import csv
 import io
 import json
 import shutil
 from collections import Counter
+from collections.abc import Callable
 from dataclasses import asdict, dataclass
+from datetime import timedelta
 from pathlib import Path
 
 from veloparc_gen import __version__
@@ -26,6 +29,7 @@ from veloparc_gen.pipeline import build_world, check_world_rules
 from veloparc_gen.sink.offsets import OffsetStore
 from veloparc_gen.sink.writer import LandingWriter, summarize_locations
 from veloparc_gen.validate import validate_world
+from veloparc_gen.world import Record, World, at_utc
 
 OUTPUT_DIRS = ("landing", "reference", "_generator")
 
@@ -143,3 +147,92 @@ def _write_reference(world, out_dir: Path) -> None:
         writer.writeheader()
         writer.writerows(rows)
         path.write_text(buffer.getvalue(), encoding="utf-8")
+
+
+# --------------------------------------------------------------------------- publish (real Kafka)
+
+
+class PublishFailed(RuntimeError):
+    pass
+
+
+def world_view(world: World, keep: Callable[[Record], bool]) -> World:
+    """Shallow copy of the world whose record lists only hold what `keep` accepts."""
+    view = copy.copy(world)
+    view.records = {source: [r for r in records if keep(r)] for source, records in world.records.items()}
+    return view
+
+
+def publish(config: Config, out_dir: Path, state_dir: Path, producer=None, reset: bool = False, log=print) -> RunResult:
+    """Generates the window and publishes what *arrives* in it: transport=kafka topics to Aiven, file topics as
+    landing files. Snapshot records (op R, older than the window) are left out: the backfill already has them.
+
+    Intended use: backfill a history as files, then publish the following days through Kafka."""
+    from veloparc_gen.kafka_conn import kafka_config
+    from veloparc_gen.sink.kafka import KafkaPublisher, kafka_producer
+
+    prepare(out_dir, state_dir, reset)
+    window = config.simulation.window
+    run_id = f"publish-{window.start:%Y%m%d}-{window.end:%Y%m%d}-{config.fingerprint()[:10]}"
+    run_dir = out_dir / "_generator" / "runs" / run_id
+
+    log(f"[1/5] building the coherent world ({', '.join(config.simulation.countries)})")
+    world = build_world(config)
+    log("[2/5] injecting anomalies")
+    anomalies = inject_all(world)
+    log("[3/5] schema gate and R1-R16")
+    validation = validate_world(world)
+    violations = check_world_rules(world)
+
+    start, end = world.window_start_utc, at_utc(window.end + timedelta(days=1))
+
+    def emitted(record: Record) -> bool:
+        return not record.dropped and record.op != "R" and start <= record.arrival < end
+
+    view = world_view(world, emitted)
+    kafka_sources = {s for s, t in config.topics.items() if t.transport == "kafka" and s != "dlq"}
+    log("[4/5] writing file-based topics")
+    offsets = OffsetStore(state_dir / "offsets.json")
+    files = LandingWriter(world_view(view, lambda r: r.source not in kafka_sources), out_dir, offsets).write_all()
+    offsets.save()
+    log("[5/5] producing kafka topics")
+    producer = producer or kafka_producer(kafka_config())
+    report = KafkaPublisher(world, producer).publish({s: view.records.get(s, []) for s in sorted(kafka_sources)})
+    if report.failures:
+        raise PublishFailed("delivery failures:\n  " + "\n  ".join(report.failures[:20]))
+
+    run_dir.mkdir(parents=True, exist_ok=True)
+    entries = []
+    for entry in anomalies.entries:
+        records = [r for r in entry.injection.records if emitted(r)]
+        if not records:
+            continue  # broken record arrives outside the window
+        file_locations = [loc for r in records for loc in files.locations.get(id(r), [])]
+        entry.landing = summarize_locations(file_locations) + [
+            {"topic": t, "partition": p, "offset": o, "kind": kind}
+            for r in records
+            for t, p, o, kind in report.locations.get(id(r), [])
+        ]
+        entries.append(entry.as_dict())
+    _write_jsonl(run_dir / "anomaly_manifest.jsonl", entries)
+    _write_jsonl(run_dir / "rule_violations.jsonl", [asdict(v) for v in violations])
+    manifest = {
+        "run_id": run_id,
+        "mode": "publish",
+        "generator_version": __version__,
+        "config_fingerprint": config.fingerprint(),
+        "seed": config.simulation.seed,
+        "window": {"from": str(window.start), "to": str(window.end)},
+        "countries": list(config.simulation.countries),
+        "scale": config.simulation.scale,
+        "anomalies_enabled": config.anomalies.enabled,
+        "records_emitted": {s: len(rs) for s, rs in sorted(view.records.items()) if rs},
+        "kafka": report.as_dict(),
+        "files": files.as_dict(),
+        "validation": validation.as_dict(),
+        "anomalies": anomalies.stats,
+        "anomaly_entries_emitted": len(entries),
+        "rules": _reconcile(violations, anomalies.entries),
+    }
+    (run_dir / "run_manifest.json").write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", "utf-8")
+    return RunResult(run_id, run_dir, manifest)

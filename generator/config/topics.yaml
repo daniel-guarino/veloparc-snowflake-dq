@@ -1,7 +1,9 @@
 # Topics as designed in docs/architecture/ingestion_kafka_s3_bronze.md. `transport` says how the topic reaches
-# the S3 landing in the live setup (Phase 3): kafka = Aiven free tier (2 partitions), file = extract written
-# straight in the S3 Sink layout. The backfill writes every topic as files, in the same layout and envelope.
+# Snowflake in the live setup (ADR 0003): kafka = Aiven (2 partitions, within free-tier limits), consumed by the
+# Aiven Snowflake sink; file = extract uploaded to the internal stage @BRONZE.LANDING in the S3 Sink layout.
+# The backfill writes every topic as files, in that layout and envelope; `publish` sends kafka topics to Aiven.
 # `partitions` is the effective count used by the partitioner (Aiven: 2 for kafka topics).
+# cleanup_policy / retention_hours / max_message_bytes are applied to kafka topics by `veloparc-gen kafka-setup`.
 topics:
   veloship_shipment:
     name: vlp.shipping.veloship-shipment.v1
@@ -12,6 +14,7 @@ topics:
     schema: veloship_shipment.schema.json
     producer: veloship-api
     entity: shipment
+    retention_hours: 168
   tracking_event:
     name: vlp.ops.tracking-event.v1
     transport: kafka
@@ -21,6 +24,7 @@ topics:
     schema: tracking_event.schema.json
     producer: scan-gateway
     entity: tracking_event
+    retention_hours: 168
   invoice:
     name: vlp.finance.invoice.v1
     transport: kafka
@@ -30,6 +34,8 @@ topics:
     schema: invoice.schema.json
     producer: billing
     entity: invoice
+    retention_hours: 720
+    max_message_bytes: 4194304   # invoices can carry up to 5,000 lines
   crm_object:
     name: vlp.sales.crm-object.v1
     transport: kafka
@@ -39,6 +45,8 @@ topics:
     schema: crm_object.schema.json
     producer: crm
     entity: crm_object
+    cleanup_policy: compact,delete
+    retention_hours: 720
   partner_settlement:
     name: vlp.ops.partner-settlement.v1
     transport: file
@@ -84,3 +92,4 @@ topics:
     schema: null
     producer: kafka-connect-s3-sink
     entity: dead_letter
+    retention_hours: 336

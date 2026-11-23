@@ -74,6 +74,63 @@ def backfill(
         raise typer.Exit(code=2)
 
 
+@app.command()
+def publish(
+    start: Annotated[str, typer.Option("--from", help="First day (YYYY-MM-DD)")],
+    end: Annotated[str, typer.Option("--to", help="Last day (YYYY-MM-DD)")],
+    countries: Annotated[str, typer.Option(help="Comma-separated country codes")] = "",
+    out: Annotated[Path, typer.Option(help="Output for file-based topics and manifests")] = Path("out"),
+    state_dir: Annotated[Path, typer.Option(help="Offsets of the file-based topics")] = Path("state"),
+    seed: Annotated[int | None, typer.Option(help="Override the seed")] = None,
+    scale: Annotated[float | None, typer.Option(help="Volume multiplier")] = None,
+    anomalies: Annotated[bool, typer.Option("--anomalies/--no-anomalies")] = True,
+    dry_run: Annotated[bool, typer.Option(help="Do not connect to Kafka: simulate the producer")] = False,
+    reset: Annotated[bool, typer.Option(help="Replace existing output and offsets")] = False,
+) -> None:
+    """Publish what arrives in the window: kafka topics to Aiven, file topics as landing files."""
+    from veloparc_gen.run import OutputExists, PublishFailed
+    from veloparc_gen.run import publish as run_publish
+    from veloparc_gen.sink.kafka import DryRunProducer
+    from veloparc_gen.validate import ValidationFailed
+
+    config = load_config(
+        start=_date(start),
+        end=_date(end),
+        countries=[c.strip().upper() for c in countries.split(",") if c.strip()] or None,
+        seed=seed,
+        scale=scale,
+        anomalies_enabled=anomalies,
+    )
+    producer = DryRunProducer({t.name: t.partitions for t in config.topics.values()}) if dry_run else None
+    try:
+        result = run_publish(config, out, state_dir, producer=producer, reset=reset, log=typer.echo)
+    except (OutputExists, ValidationFailed, PublishFailed) as exc:
+        typer.secho(str(exc), fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1) from exc
+    manifest = result.run_manifest
+    for stats in manifest["kafka"]["topics"].values():
+        typer.echo(f"  {stats['name']}: {stats['delivered']}/{stats['messages']} delivered")
+    typer.echo(f"run {result.run_id}{' (dry run)' if dry_run else ''}: manifests in {result.run_dir}")
+    if manifest["rules"]["unexplained"]:
+        typer.secho(f"  rules violated without an injected anomaly: {manifest['rules']['unexplained']}", fg="red")
+        raise typer.Exit(code=2)
+
+
+@app.command("kafka-setup")
+def kafka_setup_cmd() -> None:
+    """Create/align the Kafka topics, the producer ACL and the JSON Schemas on Aiven (idempotent)."""
+    from veloparc_gen import kafka_setup
+    from veloparc_gen.aiven import AivenError
+    from veloparc_gen.kafka_conn import MissingSettings
+
+    try:
+        kafka_setup.run(load_config(), log=typer.echo)
+    except (AivenError, MissingSettings, RuntimeError) as exc:
+        typer.secho(str(exc), fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo("OK")
+
+
 @app.command("kafka-check")
 def kafka_check() -> None:
     """Connect to Aiven Kafka and the Schema Registry with the credentials in the environment."""
