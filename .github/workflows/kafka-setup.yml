@@ -30,9 +30,9 @@ jobs:
       - name: Kafka setup
         env:
           AIVEN_API_TOKEN: ${{ secrets.AIVEN_API_TOKEN }}
-          AIVEN_PROJECT: ${{ vars.AIVEN_PROJECT }}
-          AIVEN_SERVICE: ${{ vars.AIVEN_SERVICE }}
-          KAFKA_GENERATOR_USER: ${{ vars.KAFKA_GENERATOR_USER }}
+          AIVEN_PROJECT: ${{ vars.AIVEN_PROJECT || secrets.AIVEN_PROJECT }}
+          AIVEN_SERVICE: ${{ vars.AIVEN_SERVICE || secrets.AIVEN_SERVICE }}
+          KAFKA_GENERATOR_USER: ${{ vars.KAFKA_GENERATOR_USER || secrets.KAFKA_GENERATOR_USER }}
           SCHEMA_REGISTRY_URL: ${{ secrets.SCHEMA_REGISTRY_URL }}
           SCHEMA_REGISTRY_BASIC_AUTH: ${{ secrets.SCHEMA_REGISTRY_BASIC_AUTH }}
         run: uv run --no-dev veloparc-gen kafka-setup
