@@ -26,6 +26,8 @@ Schema Registry com compatibilidade BACKWARD mas sem validação estrita no prod
 
 ## Landing S3
 
+> **Atualização (ADR 0003):** sem conta AWS. O mesmo layout vive no stage interno do Snowflake `@BRONZE.LANDING` (backfill e tópicos de ficheiro, enviados por GitHub Actions com `PUT`); os tópicos Kafka chegam ao Snowflake pelo conector Snowflake gerido da Aiven (Snowpipe Streaming), com `RECORD_METADATA` (topic, partition, offset, timestamp, key, headers) a alimentar as mesmas colunas de metadados.
+
 ```
 s3://vlp-dp-landing-prd/landing/kafka/<topic>/year=YYYY/month=MM/day=dd/hour=HH/<topic>+<partition>+<startOffset>.json.gz
 ```

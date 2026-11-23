@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Portfolio case: a data quality platform for the Sales & Finance data products of **Veloparc**, a fictitious European parcel carrier. Python generator → Kafka (Aiven) and files → S3 landing → Snowflake (bronze via Snowpipe) → dbt (silver, gold, DQ).
+Portfolio case: a data quality platform for the Sales & Finance data products of **Veloparc**, a fictitious European parcel carrier. Python generator → Kafka (Aiven) → Snowflake via the Aiven Snowflake sink, and files → Snowflake internal stage → bronze → dbt (silver, gold, DQ). No AWS account (ADR 0003).
 
 ## Hard rules
 
@@ -22,18 +22,19 @@ Portfolio case: a data quality platform for the Sales & Finance data products of
 | `docs/data-model/source_to_silver_mapping.md` | Column-by-column source → silver mapping with Snowflake expressions, gaps and decisions |
 | `docs/data-model/silver_to_gold_mapping.md` | Silver → gold mapping, bus matrix, SCD rules, unknown members, gaps and decisions |
 | `generator/` | Data generator (Phase 2): `config/` (simulation, anomalies, topics), `src/veloparc_gen/`, `tests/`, README with how to run and trace anomalies |
-| `docs/adr/` | Architecture decision records (0001: CI/CD pipeline; 0002: managed Kafka Connect and execution in GitHub Actions; Phase 0 decisions still to be written) |
+| `docs/adr/` | Architecture decision records (0001: CI/CD pipeline; 0002: managed Kafka Connect and execution in GitHub Actions; 0003: no AWS, internal stage + Aiven Snowflake sink; Phase 0 decisions still to be written) |
 | `Makefile`, `pyproject.toml`, `.pre-commit-config.yaml`, `.github/workflows/` | Tooling: `make setup lint test validate-contracts generate`; CI on PRs, merge on approval, deploy from main |
 
-Planned layout for code (create as phases progress): `connect/` (managed connector configs), `infra/terraform/aws/`, `infra/snowflake/`, `dbt/veloparc/`, `apps/streamlit/`.
+Planned layout for code (create as phases progress): `connect/` (managed connector configs, applied through the Aiven API), `infra/snowflake/`, `dbt/veloparc/`, `apps/streamlit/`.
 
 ## Key decisions already taken
 
-- **Region:** AWS `eu-west-3` (Paris) for S3 and Snowflake.
+- **Region:** Snowflake on AWS `eu-west-3` (Paris), in Snowflake's own cloud account. Aiven trial in the UK (DigitalOcean, London). No AWS account of ours.
 - **Kafka:** Aiven, trial plan without a credit card (when the trial ends the service is powered off, never billed). Kept within the free-tier limits (5 topics × 2 partitions) so a downgrade keeps the topics working. On Kafka: shipments, tracking events, invoices, CRM, DLQ. Master data, tariffs, partner settlements and GL arrive as files in the same landing layout and envelope. `topics.yaml` has `transport: kafka | file` per topic.
-- **Kafka → S3:** managed Kafka Connect on Aiven (enabled with "Set up Kafka Connect") running the Aiven S3 sink connector; configuration versioned in `connect/`. 2-month backfill goes straight to S3 as files. ADR 0002.
+- **Kafka → Snowflake:** managed Kafka Connect on Aiven running the Snowflake sink connector (Snowpipe Streaming) into one connector table per topic; configuration versioned in `connect/` and applied through the Aiven API by GitHub Actions. ADR 0002, ADR 0003.
+- **Files → Snowflake:** the 2-month backfill (all topics) and the 4 file-based topics are uploaded by GitHub Actions to the internal stage `@BRONZE.LANDING`, same `landing/kafka/<topic>/year=/month=/day=[/hour=]/` layout; generator manifests and state go to `@BRONZE.GENERATOR`. ADR 0003.
 - **Execution:** nothing runs on the maintainer's computer. Everything that touches a cloud service (generator runs, Kafka setup, Terraform, Snowflake deploys, dbt) runs in GitHub Actions, with credentials as secrets of the GitHub Environment `dev`. Claude cloud sessions write and test code and trigger workflows, but hold no credentials (Kafka is not reachable through the session's HTTPS proxy). ADR 0002.
-- **Bronze:** outside dbt; one `RAW_*` table and one Snowpipe per topic, append-only, 25 metadata columns + `RAW_PAYLOAD VARIANT`. Invalid payloads go to `BRONZE.DQ_QUARANTINE`.
+- **Bronze:** outside dbt; one `RAW_*` table per topic, append-only, 25 metadata columns + `RAW_PAYLOAD VARIANT`, fed by two loaders (COPY from stage files; stream + task from the connector table). Technical dedup by (topic, partition, offset, `ce_id`). Invalid payloads go to `BRONZE.DQ_QUARANTINE`.
 - **dbt:** `stg_` views → incremental `silver` (merge) → `gold` star schema → `dq` models. Hash surrogate keys (`dbt_utils.generate_surrogate_key`). Unknown members = -1.
 - **Data quality:** each rule R1–R16 is a dbt test with `meta: {rule_id, dimension, owner}`; failures stored; `dq_issue`, `dq_scorecard_daily`, and `dq_detection_eval` comparing detections with the generator's `anomaly_manifest.jsonl` (precision/recall).
 
