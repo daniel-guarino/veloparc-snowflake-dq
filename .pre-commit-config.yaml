@@ -1,0 +1,71 @@
+# Install with `make setup`; run on everything with `uv run pre-commit run --all-files`.
+default_language_version:
+  python: python3.12
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-added-large-files
+        args: ["--maxkb=500"]
+      - id: check-merge-conflict
+      - id: check-yaml
+      - id: check-json
+      - id: detect-private-key
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.17.6
+    hooks:
+      - id: ruff-check
+        args: ["--fix"]
+      - id: ruff-format
+
+  - repo: https://github.com/python-jsonschema/check-jsonschema
+    rev: 0.39.0
+    hooks:
+      - id: check-metaschema
+        name: contract schemas are valid draft 2020-12
+        files: ^contracts/schemas/.*\.schema\.json$
+      - id: check-github-workflows
+      - id: check-dependabot
+      - id: check-jsonschema
+        name: contract example (veloship_shipment)
+        files: ^contracts/examples/veloship_shipment\.json$
+        args: ["--schemafile", "contracts/schemas/veloship_shipment.schema.json"]
+      - id: check-jsonschema
+        name: contract example (tracking_event)
+        files: ^contracts/examples/tracking_event\.json$
+        args: ["--schemafile", "contracts/schemas/tracking_event.schema.json"]
+      - id: check-jsonschema
+        name: contract example (invoice)
+        files: ^contracts/examples/invoice(_credit_note)?\.json$
+        args: ["--schemafile", "contracts/schemas/invoice.schema.json"]
+      - id: check-jsonschema
+        name: contract example (crm_object)
+        files: ^contracts/examples/crm_(lead|opportunity)\.json$
+        args: ["--schemafile", "contracts/schemas/crm_object.schema.json"]
+      - id: check-jsonschema
+        name: contract example (partner_settlement)
+        files: ^contracts/examples/partner_settlement\.json$
+        args: ["--schemafile", "contracts/schemas/partner_settlement.schema.json"]
+      - id: check-jsonschema
+        name: contract example (tariff)
+        files: ^contracts/examples/tariff\.json$
+        args: ["--schemafile", "contracts/schemas/tariff.schema.json"]
+      - id: check-jsonschema
+        name: contract example (gl_extract_row)
+        files: ^contracts/examples/gl_extract_row\.json$
+        args: ["--schemafile", "contracts/schemas/gl_extract_row.schema.json"]
+      - id: check-jsonschema
+        name: contract example (master_data)
+        files: ^contracts/examples/master_data_(customer|depot|partner)\.json$
+        args: ["--schemafile", "contracts/schemas/master_data.schema.json"]
+
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.5.0
+    hooks:
+      - id: detect-secrets
+        args: ["--baseline", ".secrets.baseline"]
+        exclude: ^uv\.lock$

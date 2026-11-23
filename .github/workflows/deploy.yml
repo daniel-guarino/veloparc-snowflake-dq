@@ -1,0 +1,21 @@
+# Deploy pipeline for main. Started by merge-on-approval.yml (workflow_dispatch) or by a push to main
+# (a merge done by hand in the UI). Today it re-verifies main; the Snowflake and dbt stages are added
+# in Phases 5-10 (see docs/adr/0001-ci-cd-pipeline.md).
+name: deploy
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-main
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: verify main
+    uses: ./.github/workflows/ci.yml

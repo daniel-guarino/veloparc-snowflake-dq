@@ -21,7 +21,8 @@ Portfolio case: a data quality platform for the Sales & Finance data products of
 | `docs/data-model/silver_model.dbml`, `gold_star_schema.dbml` | Silver and gold (star schema) models |
 | `docs/data-model/source_to_silver_mapping.md` | Column-by-column source → silver mapping with Snowflake expressions, gaps and decisions |
 | `docs/data-model/silver_to_gold_mapping.md` | Silver → gold mapping, bus matrix, SCD rules, unknown members, gaps and decisions |
-| `docs/adr/` | Architecture decision records (to be written, see Phase 0) |
+| `docs/adr/` | Architecture decision records (0001: CI/CD pipeline; Phase 0 decisions still to be written) |
+| `Makefile`, `pyproject.toml`, `.pre-commit-config.yaml`, `.github/workflows/` | Tooling: `make setup lint test validate-contracts generate`; CI on PRs, merge on approval, deploy from main |
 
 Planned layout for code (create as phases progress): `generator/`, `connect/`, `infra/terraform/aws/`, `infra/snowflake/`, `dbt/veloparc/`, `apps/streamlit/`.
 
@@ -36,5 +37,5 @@ Planned layout for code (create as phases progress): `generator/`, `connect/`, `
 
 ## Open items
 
-- `contracts/examples/` has 12 coherent examples validated by `contracts/validate_examples.py` (schemas + R1, R2, R6, R7, R8, R9, R12, R14, R15). Wire it into CI in Phase 10 and keep it green whenever a schema changes.
+- `contracts/examples/` has 12 coherent examples validated by `contracts/validate_examples.py` (schemas + R1, R2, R6, R7, R8, R9, R12, R14, R15). It runs in CI (`make validate-contracts`); keep it green whenever a schema changes.
 - Open gaps listed in both mapping docs (e.g. `related_invoice_number`, FX reference table, postal-code → zone reference).

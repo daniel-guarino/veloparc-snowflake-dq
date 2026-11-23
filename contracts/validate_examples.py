@@ -9,6 +9,7 @@ Exits with status 1 if any example fails, so it can run in CI.
 
 from __future__ import annotations
 
+import itertools
 import json
 import sys
 from decimal import Decimal
@@ -88,7 +89,7 @@ def rule_errors() -> list[str]:
     bands = trf["weightBands"]
     if bands[0]["fromKg"] != 0:
         errors.append("R14: first band must start at 0")
-    for a, b in zip(bands, bands[1:]):
+    for a, b in itertools.pairwise(bands):
         if a["toKg"] != b["fromKg"] or not a["price"] < b["price"]:
             errors.append(f"R14: bands {a} -> {b} not contiguous/increasing")
 
@@ -130,8 +131,11 @@ def rule_errors() -> list[str]:
         errors.append("R12: stops > deliveredParcels")
 
     # R15: GS1 check digits and VAT prefix
-    glns = [e["master_data_depot.json"]["gln"], e["master_data_partner.json"]["baseDepotGln"],
-            e["tracking_event.json"]["bizLocation"]["gln"]]
+    glns = [
+        e["master_data_depot.json"]["gln"],
+        e["master_data_partner.json"]["baseDepotGln"],
+        e["tracking_event.json"]["bizLocation"]["gln"],
+    ]
     for code in glns + [p["SSCC"] for p in parcels if "SSCC" in p]:
         if not gs1_check_digit_ok(code):
             errors.append(f"R15: invalid GS1 check digit in {code}")
@@ -156,7 +160,9 @@ def main() -> int:
     for err in errors:
         print(f"FAIL {err}")
     if not errors:
-        print(f"OK {len(EXAMPLE_SCHEMA)} examples valid against schemas and rules R1, R2, R6, R7, R8, R9, R12, R14, R15")
+        print(
+            f"OK {len(EXAMPLE_SCHEMA)} examples valid against schemas and rules R1, R2, R6, R7, R8, R9, R12, R14, R15"
+        )
     return 1 if errors else 0
 
 
