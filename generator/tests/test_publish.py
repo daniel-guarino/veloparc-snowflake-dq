@@ -68,8 +68,9 @@ def test_manifest_points_to_kafka_offsets(published):
 
 
 class FakeApi(AivenApi):
-    def __init__(self, existing_topics=(), acls=()):
+    def __init__(self, existing_topics=(), acls=(), node_count=3):
         self.calls = []
+        self.node_count = node_count
         self._topics = {t: {"topic_name": t, "partitions": 2} for t in existing_topics}
         self._acls = list(acls)
         super().__init__("proj", "svc", transport=self._transport)
@@ -79,7 +80,7 @@ class FakeApi(AivenApi):
         if method == "GET" and url.endswith("/topic"):
             return {"topics": list(self._topics.values())}
         if method == "GET":
-            return {"service": {"node_count": 3, "acl": self._acls}}
+            return {"service": {"node_count": self.node_count, "acl": self._acls}}
         return {}
 
 
@@ -117,3 +118,10 @@ def test_register_schemas_as_json_with_backward_compatibility():
     posts = [b for m, p, b in calls if m == "POST"]
     assert all(b["schemaType"] == "JSON" and json.loads(b["schema"])["$schema"] for b in posts)
     assert all(b == {"compatibility": "BACKWARD"} for m, p, b in calls if m == "PUT")
+
+
+def test_single_node_service_gets_replication_one():
+    api = FakeApi(node_count=1)
+    kafka_setup.ensure_topics(api, small_config(), log=lambda *_: None)
+    created = [b for m, path, b in api.calls if m == "POST" and path == "/topic"]
+    assert created and all(b["replication"] == 1 for b in created)
