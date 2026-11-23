@@ -12,7 +12,7 @@ import os
 import urllib.error
 import urllib.request
 
-from veloparc_gen.aiven import AivenApi
+from veloparc_gen.aiven import AivenApi, AivenError
 from veloparc_gen.config import Config
 from veloparc_gen.kafka_conn import schema_registry_endpoint
 
@@ -32,15 +32,32 @@ def desired_topics(config: Config) -> dict[str, dict]:
     return out
 
 
+SINGLE_REPLICA_PLANS = ("free", "developer", "hobbyist")
+
+
+def replication_for(service: dict) -> int:
+    """One replica per node (max 3); free/developer plans only accept 1, whatever node_count says."""
+    plan = str(service.get("plan") or "").lower()
+    if plan.startswith(SINGLE_REPLICA_PLANS):
+        return 1
+    return max(1, min(3, int(service.get("node_count") or 1)))
+
+
 def ensure_topics(api: AivenApi, config: Config, log=print) -> dict[str, str]:
     existing = api.topics()
-    # One replica per node, at most 3. The Aiven developer tier is a single node and only accepts replication 1.
-    nodes = int(api.service().get("node_count") or 1)
-    replication = max(1, min(3, nodes))
+    service = api.service()
+    replication = replication_for(service)
+    log(f"service plan {service.get('plan', '?')}, {service.get('node_count', '?')} node(s): replication {replication}")
     actions = {}
     for name, spec in desired_topics(config).items():
         if name not in existing:
-            api.create_topic(name, spec["partitions"], replication, spec["config"])
+            try:
+                api.create_topic(name, spec["partitions"], replication, spec["config"])
+            except AivenError as exc:
+                if replication == 1 or "cannot be different than 1" not in str(exc):
+                    raise
+                replication = 1  # the plan only accepts one replica: keep it for the remaining topics
+                api.create_topic(name, spec["partitions"], replication, spec["config"])
             actions[name] = f"created ({spec['partitions']} partitions, replication {replication})"
         else:
             current = int(existing[name].get("partitions") or 0)

@@ -125,3 +125,24 @@ def test_single_node_service_gets_replication_one():
     kafka_setup.ensure_topics(api, small_config(), log=lambda *_: None)
     created = [b for m, path, b in api.calls if m == "POST" and path == "/topic"]
     assert created and all(b["replication"] == 1 for b in created)
+
+
+def test_developer_plan_gets_replication_one_even_with_more_nodes():
+    assert kafka_setup.replication_for({"plan": "developer-4", "node_count": 3}) == 1
+    assert kafka_setup.replication_for({"plan": "business-4", "node_count": 3}) == 3
+    assert kafka_setup.replication_for({"plan": "startup-2", "node_count": 2}) == 2
+
+
+def test_retries_with_one_replica_when_the_plan_refuses_more():
+    from veloparc_gen.aiven import AivenError
+
+    class StrictApi(FakeApi):
+        def _transport(self, method, url, body):
+            if method == "POST" and url.endswith("/topic") and body["replication"] != 1:
+                raise AivenError("HTTP 400: Replication factor for developer tier cannot be different than 1")
+            return super()._transport(method, url, body)
+
+    api = StrictApi(node_count=3)
+    kafka_setup.ensure_topics(api, small_config(), log=lambda *_: None)
+    created = [b for m, path, b in api.calls if m == "POST" and path == "/topic"]
+    assert len(created) == 5 and all(b["replication"] == 1 for b in created)
