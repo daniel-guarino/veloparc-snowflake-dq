@@ -34,8 +34,9 @@ def desired_topics(config: Config) -> dict[str, dict]:
 
 def ensure_topics(api: AivenApi, config: Config, log=print) -> dict[str, str]:
     existing = api.topics()
-    nodes = int(api.service().get("node_count") or 3)
-    replication = max(2, min(3, nodes))
+    # One replica per node, at most 3. The Aiven developer tier is a single node and only accepts replication 1.
+    nodes = int(api.service().get("node_count") or 1)
+    replication = max(1, min(3, nodes))
     actions = {}
     for name, spec in desired_topics(config).items():
         if name not in existing:
