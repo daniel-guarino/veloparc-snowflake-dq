@@ -30,8 +30,8 @@ test: ## Unit and integration tests with coverage
 validate-contracts: ## Contract examples against schemas and rules R1, R2, R6-R9, R12, R14, R15
 	$(UV) run python contracts/validate_examples.py
 
-generate: ## Backfill landing files, run_manifest.json and anomaly_manifest.jsonl into $(OUT)
-	$(UV) run veloparc-gen backfill --from $(FROM) --to $(TO) --countries $(COUNTRIES) --out $(OUT)
+generate: ## Backfill (replaces previous output): landing files, run and anomaly manifests into $(OUT)
+	$(UV) run veloparc-gen backfill --from $(FROM) --to $(TO) --countries $(COUNTRIES) --out $(OUT) --reset
 
 clean: ## Remove generator output, state and caches
 	rm -rf out/ state/ .pytest_cache .ruff_cache .coverage
