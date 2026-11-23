@@ -108,6 +108,8 @@ Reference volume: ~130 thousand shipments and close to 1 million events over 2 m
 
 ## Phase 3 · Kafka on Aiven + files
 
+> **Update (ADR 0003):** no AWS account. Kafka topics reach Snowflake through the Aiven-managed **Snowflake sink connector**; files (backfill and file-based topics) go to the Snowflake internal stage `@BRONZE.LANDING`. Where this section mentions S3 or the S3 sink, read the internal stage and the Snowflake sink. New order: 3a producer, `stream` and Kafka setup through the Aiven API → 3b Snowflake foundation (Phase 5, moved earlier) → 3c Snowflake sink connector → 3d backfill upload to the internal stage.
+
 Decision: real managed Kafka on Aiven for the continuous sources, and files written straight to S3 for the history and for the sources that don't fit within the limits. The generator has code for every topic; only those the plan allows are connected to the broker. The S3 landing and everything downstream are the same on both paths.
 
 **Plan.** The service runs on Aiven's trial plan, without a credit card: managed Kafka Connect is available, and when the trial ends the service is powered off (never billed). The topology stays within the free-tier limits below, so a downgrade keeps the topics working; only Kafka Connect would be lost (fallback: self-hosted Connect, see alternatives). See ADR 0002.
@@ -152,6 +154,8 @@ The generator's `sink/` module keeps simulating the broker for the backfill and 
 
 ## Phase 4 · S3 landing
 
+> **Dropped (ADR 0003):** no AWS account. The landing layout below lives in the Snowflake internal stage `@BRONZE.LANDING`, and the generator outputs in `@BRONZE.GENERATOR`. Kept for reference.
+
 One bucket per environment, with prefixes by function and the Hive layout (`year=/month=/day=/hour=`) defined on the ingestion page. All AWS infrastructure lives in Terraform, in `infra/terraform/aws`.
 
 Bucket names are global on AWS: `vlp-dp-landing-prd` may already be taken. Add a short random suffix (e.g. `vlp-dp-landing-dev-7k3q`) and keep it in a variable.
@@ -177,6 +181,8 @@ s3://vlp-dp-landing-dev-<suffix>/
 Why store the anomaly manifest in S3: Phase 9 loads it into `DQ.ANOMALY_GROUND_TRUTH` and compares it with what the tests detected. It stays outside `landing/` so no pipe loads it as business data.
 
 ## Phase 5 · Snowflake foundation
+
+> **Update (ADR 0003):** moved before the Snowflake sink connector (Phase 3b). Adds the internal stages `@BRONZE.LANDING` and `@BRONZE.GENERATOR` and a key-pair service user for the Aiven connector; no storage integration or S3 notification.
 
 Open the trial in this phase and create everything through versioned SQL scripts in `infra/snowflake/`, applied with `schemachange`. Nothing is created by hand in Snowsight, so the repo can rebuild the account from scratch.
 
@@ -361,7 +367,7 @@ The full plan is about 17 days of focused work; a minimum path that already prov
 | 1 · Repository | 0.5 | Same |
 | 2 · Generator | 3 | Backfill mode only; anomalies for the sources used below |
 | 3 · Kafka on Aiven + files | 1 + 1 | Backfill via files + Aiven with tracking events only |
-| 4 · S3 | 0.5 | AWS CLI instead of Terraform |
+| 4 · S3 | 0 | Dropped (ADR 0003): internal stage instead |
 | 5 · Snowflake foundation | 0.5 | Same (RBAC simplified to two roles) |
 | 6 · Bronze | 1.5 | Pipes yes; JSON validation in dbt instead of stream + task |
 | 7 · dbt and silver | 2 | 4 sources: master data, shipments, events, invoices (+ tariffs for R8) |
@@ -370,4 +376,4 @@ The full plan is about 17 days of focused work; a minimum path that already prov
 | 10 · Orchestration and CI/CD | 1.5 | Only `ci.yml` with lint and pytest |
 | 11 · Documentation and demo | 1 | README and demo script |
 
-Order to avoid getting blocked: phases 1 to 4 don't need Snowflake and can move ahead before the trial is opened; Phase 9 depends on 7 and doesn't need 8 complete, so gold can be cut first if time gets tight. The other Aiven topics and Streamlit are the best extras to add after the minimum path.
+Order to avoid getting blocked: the Kafka producer and topic setup (3a) don't need Snowflake; the connector (3c) and the backfill upload (3d) do, so the Snowflake trial opens at 3b; Phase 9 depends on 7 and doesn't need 8 complete, so gold can be cut first if time gets tight. The other Aiven topics and Streamlit are the best extras to add after the minimum path.
