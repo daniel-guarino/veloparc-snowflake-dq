@@ -1,0 +1,13 @@
+{
+  "settlementId": "STL-PT-2026-10-P001-Z1",
+  "partnerId": "P001",
+  "partnerName": "Rota Rápida Entregas",
+  "period": "2026-10",
+  "zone": "PT-Z1",
+  "currency": "EUR",
+  "stops": 1840,
+  "deliveredParcels": 2215,
+  "failedAttempts": 37,
+  "costPerStop": 2.35,
+  "totalCost": 4324.00
+}

@@ -22,7 +22,7 @@ Os schemas descrevem **o que cada fonte promete enviar**. Servem para duas coisa
 | `gl_extract_row.schema.json` | ERP (uma linha do CSV) | `RAW_GL_EXTRACT` | `gl_balance` |
 | `master_data.schema.json` | Master data (customer, depot ou partner) | `RAW_MASTER_DATA` | `customer`, `depot`, `partner`, `partner_zone` |
 
-A pasta `examples/` tem um exemplo válido por tipo de objeto (11 ficheiros), todos validados contra os schemas.
+A pasta `examples/` tem 12 exemplos válidos: um por tipo de objeto, mais uma nota de crédito. Contam uma história coerente: o cliente `351000123A` (PT) envia 2 volumes (`ZK7Q2M9P`, `ZK7Q2M9R`), o primeiro é recolhido no depot `5601234000016`, ambos são faturados com a tarifa `TRF-351000123A-PARCEL-Z1-0002` e o segundo é creditado. `validate_examples.py` valida-os contra os schemas e contra as regras R1, R2, R6, R7, R8, R9, R12, R14 e R15.
 
 ## Ordem de geração (dependências)
 
@@ -92,14 +92,11 @@ O JSON Schema valida um objeto de cada vez. A coerência entre fontes tem de vir
 
 ## Validar localmente
 
+A partir da raiz do repositório:
+
 ```bash
-pip install jsonschema
-python - <<'EOF'
-import json, pathlib
-from jsonschema import Draft202012Validator, FormatChecker
-schema = json.load(open("schemas/tracking_event.schema.json"))
-event  = json.load(open("examples/tracking_event.json"))
-errors = list(Draft202012Validator(schema, format_checker=FormatChecker()).iter_errors(event))
-print("válido" if not errors else [e.message for e in errors])
-EOF
+pip install "jsonschema[format]"
+python contracts/validate_examples.py
 ```
+
+O script termina com código 1 se algum exemplo falhar o schema ou uma regra, por isso pode correr no CI.

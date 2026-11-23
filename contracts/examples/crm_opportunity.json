@@ -1,0 +1,16 @@
+{
+  "attributes": {
+    "type": "Opportunity"
+  },
+  "Id": "006Vp0000001AbCdEf",
+  "AccountId": "001Vp0000002XyZaBc",
+  "VLP_ContactID__c": "351000123A",
+  "Name": "Casa Lusitana Online - contrato nacional 2026",
+  "StageName": "Closed Won",
+  "Amount": 48000,
+  "CurrencyIsoCode": "EUR",
+  "CloseDate": "2026-08-28",
+  "Country__c": "PT",
+  "Expected_Parcels_Month__c": 1200,
+  "LastModifiedDate": "2026-08-28T14:03:11.000+0000"
+}

@@ -1,0 +1,21 @@
+{
+  "eventId": "evt-3fa85f64-0001",
+  "eventType": "ObjectEvent",
+  "eventTime": "2026-10-05T16:40:12+01:00",
+  "recordTime": "2026-10-05T15:40:19Z",
+  "trackId": "ZK7Q2M9P",
+  "epcList": [
+    "urn:epc:id:sscc:5601234.3000000001"
+  ],
+  "status": "PICKUP",
+  "bizStep": "urn:epcglobal:cbv:bizstep:accepting",
+  "bizLocation": {
+    "gln": "5601234000016",
+    "name": "Veloparc Depot Lisboa Norte"
+  },
+  "reasonCode": null,
+  "device": {
+    "scannerId": "SCN-PT-0042",
+    "firmware": "4.2.1"
+  }
+}

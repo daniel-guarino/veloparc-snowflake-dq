@@ -1,0 +1,11 @@
+{
+  "entity": "partner",
+  "partnerId": "P001",
+  "name": "Rota Rápida Entregas",
+  "countryCode": "PT",
+  "zones": [
+    "PT-Z1",
+    "PT-Z2"
+  ],
+  "baseDepotGln": "5601234000016"
+}

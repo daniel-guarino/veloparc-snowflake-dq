@@ -1,0 +1,16 @@
+{
+  "tariffId": "TRF-351000123A-PARCEL-Z1-0002",
+  "contactId": "351000123A",
+  "product": "PARCEL",
+  "zone": "PT-Z1",
+  "currency": "EUR",
+  "validFrom": "2026-09-01",
+  "validTo": null,
+  "fuelSurchargePct": 12.5,
+  "weightBands": [
+    { "fromKg": 0, "toKg": 2, "price": 4.50 },
+    { "fromKg": 2, "toKg": 5, "price": 5.90 },
+    { "fromKg": 5, "toKg": 10, "price": 7.80 },
+    { "fromKg": 10, "toKg": 30, "price": 11.50 }
+  ]
+}

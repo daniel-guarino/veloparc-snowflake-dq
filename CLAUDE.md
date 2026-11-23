@@ -16,6 +16,7 @@ Portfolio case: a data quality platform for the Sales & Finance data products of
 | `docs/architecture/implementation_plan.md` | Phase-by-phase plan (0–11) and minimum path. Start here. |
 | `docs/architecture/ingestion_kafka_s3_bronze.md` | Topics, headers, S3 landing layout, the 25 bronze metadata columns, bronze DQ |
 | `contracts/schemas/` | 8 JSON Schemas (draft 2020-12), one per source |
+| `contracts/examples/`, `contracts/validate_examples.py` | Valid example payloads and their validator |
 | `contracts/README.md` | Generation order, cross-source rules **R1–R16**, volumes, anomalies to inject |
 | `docs/data-model/silver_model.dbml`, `gold_star_schema.dbml` | Silver and gold (star schema) models |
 | `docs/data-model/source_to_silver_mapping.md` | Column-by-column source → silver mapping with Snowflake expressions, gaps and decisions |
@@ -35,5 +36,5 @@ Planned layout for code (create as phases progress): `generator/`, `connect/`, `
 
 ## Open items
 
-- `contracts/examples/` (11 valid example payloads, one per object type) is referenced in `contracts/README.md` but not committed yet; create it in Phase 2 and validate it in CI.
+- `contracts/examples/` has 12 coherent examples validated by `contracts/validate_examples.py` (schemas + R1, R2, R6, R7, R8, R9, R12, R14, R15). Wire it into CI in Phase 10 and keep it green whenever a schema changes.
 - Open gaps listed in both mapping docs (e.g. `related_invoice_number`, FX reference table, postal-code → zone reference).

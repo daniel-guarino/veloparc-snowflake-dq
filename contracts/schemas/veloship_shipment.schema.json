@@ -269,7 +269,7 @@
                     "pattern": "^[0-9]{18}$",
                     "description": "GS1 Serial Shipping Container Code (18 dígitos, o último é dígito de controlo)",
                     "examples": [
-                      "356012340000000018"
+                      "356012340000000017"
                     ]
                   }
                 }

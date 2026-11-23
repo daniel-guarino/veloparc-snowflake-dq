@@ -1,0 +1,33 @@
+{
+  "invoiceNumber": "PT-2026-0046002",
+  "docType": "CREDIT_NOTE",
+  "issueDate": "2026-11-10",
+  "billingPeriod": "2026-10",
+  "relatedInvoiceNumber": "PT-2026-0045871",
+  "customer": {
+    "contactId": "351000123A",
+    "vatNumber": "PTVLP0000123"
+  },
+  "currency": "EUR",
+  "fxRateToEur": 1.0,
+  "lines": [
+    {
+      "lineNo": 1,
+      "trackId": "ZK7Q2M9R",
+      "tariffId": "TRF-351000123A-PARCEL-Z1-0002",
+      "product": "PARCEL",
+      "weightKg": 3.2,
+      "zone": "PT-Z1",
+      "basePrice": -5.90,
+      "surcharges": [
+        { "type": "FUEL", "amount": -0.74 }
+      ],
+      "netAmount": -6.64
+    }
+  ],
+  "totals": {
+    "net": -6.64,
+    "vat": -1.53,
+    "gross": -8.17
+  }
+}
