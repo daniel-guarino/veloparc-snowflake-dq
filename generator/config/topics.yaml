@@ -1,0 +1,86 @@
+# Topics as designed in docs/architecture/ingestion_kafka_s3_bronze.md. `transport` says how the topic reaches
+# the S3 landing in the live setup (Phase 3): kafka = Aiven free tier (2 partitions), file = extract written
+# straight in the S3 Sink layout. The backfill writes every topic as files, in the same layout and envelope.
+# `partitions` is the effective count used by the partitioner (Aiven: 2 for kafka topics).
+topics:
+  veloship_shipment:
+    name: vlp.shipping.veloship-shipment.v1
+    transport: kafka
+    partitions: 2
+    landing: hour
+    key: messageId
+    schema: veloship_shipment.schema.json
+    producer: veloship-api
+    entity: shipment
+  tracking_event:
+    name: vlp.ops.tracking-event.v1
+    transport: kafka
+    partitions: 2
+    landing: hour
+    key: trackId
+    schema: tracking_event.schema.json
+    producer: scan-gateway
+    entity: tracking_event
+  invoice:
+    name: vlp.finance.invoice.v1
+    transport: kafka
+    partitions: 2
+    landing: hour
+    key: invoiceNumber
+    schema: invoice.schema.json
+    producer: billing
+    entity: invoice
+  crm_object:
+    name: vlp.sales.crm-object.v1
+    transport: kafka
+    partitions: 2
+    landing: hour
+    key: Id
+    schema: crm_object.schema.json
+    producer: crm
+    entity: crm_object
+  partner_settlement:
+    name: vlp.ops.partner-settlement.v1
+    transport: file
+    partitions: 1
+    landing: day
+    key: settlementId
+    schema: partner_settlement.schema.json
+    producer: partner-portal
+    entity: partner_settlement
+  tariff:
+    name: vlp.pricing.tariff.v1
+    transport: file
+    partitions: 3
+    landing: hour
+    key: tariffId
+    schema: tariff.schema.json
+    producer: pricing
+    entity: tariff
+  gl_extract:
+    name: vlp.finance.gl-extract.v1
+    transport: file
+    partitions: 1
+    landing: day
+    key: company_code|period|gl_account
+    schema: gl_extract_row.schema.json
+    producer: erp
+    entity: gl_extract_row
+  master_data:
+    name: vlp.mdm.master-data.v1
+    transport: file
+    partitions: 3
+    landing: hour
+    key: entity:natural_key
+    schema: master_data.schema.json
+    producer: mdm
+    entity: master_data
+  dlq:
+    name: vlp.dlq.s3-sink.v1
+    transport: kafka
+    partitions: 2
+    landing: hour
+    key: original key
+    schema: null
+    producer: kafka-connect-s3-sink
+    entity: dead_letter

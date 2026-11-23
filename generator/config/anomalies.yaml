@@ -1,0 +1,140 @@
+# One injector per row of the anomalies table in contracts/README.md. Injected after the coherent world is
+# built; every injected anomaly is a line in anomaly_manifest.jsonl (the answer key for Phase 9).
+#
+# eligible  population the rate applies to (documentation; the injector defines it). Tracking anomalies are
+#           drawn per parcel (one anomaly per parcel): ~6% of parcels, ~1% of the scans.
+# rate      share of the eligible population that gets the anomaly: exactly round(rate x eligible) are picked
+# count     fixed number of occurrences (for anomalies that are not per record)
+# schema_anomaly  true = the broken record must FAIL its JSON Schema (it goes to quarantine in bronze);
+#                 false = it must still PASS the schema (only a business rule catches it)
+enabled: true
+# Injectors run in this order; an object touched by one anomaly is not eligible for the next ones.
+anomalies:
+  gln_12_digits:
+    eligible: parcels with 2+ HUB scans
+    rule: SCHEMA
+    dq_dimension: Validity
+    source: tracking_event
+    schema_anomaly: true
+    rate: 0.010
+    description: bizLocation.gln truncated to 12 digits on a HUB scan
+  status_deliverd:
+    eligible: delivered parcels
+    rule: SCHEMA
+    dq_dimension: Validity
+    source: tracking_event
+    schema_anomaly: true
+    rate: 0.010
+    description: status DELIVERED misspelled as DELIVERD
+  repeated_event:
+    eligible: parcels with 1-2 HUB scans
+    rule: R4
+    dq_dimension: Uniqueness
+    source: tracking_event
+    schema_anomaly: false
+    rate: 0.015
+    description: scan repeated with the same trackId, status and GLN (new eventId)
+  cancelled_after_pickup:
+    eligible: picked-up parcels
+    rule: R3
+    dq_dimension: Consistency
+    source: tracking_event
+    schema_anomaly: false
+    rate: 0.005
+    description: CANCELLED scan after PICKUP
+  delivered_without_in_delivery:
+    eligible: parcels delivered at the door
+    rule: R3
+    dq_dimension: Consistency
+    source: tracking_event
+    schema_anomaly: false
+    rate: 0.005
+    description: IN_DELIVERY scan missing before DELIVERED
+  late_record_time:
+    eligible: picked-up parcels
+    rule: R5
+    dq_dimension: Timeliness
+    source: tracking_event
+    schema_anomaly: false
+    rate: 0.015
+    description: recordTime hours after eventTime
+  country_day_outage:
+    eligible: weekdays x countries
+    rule: R5
+    dq_dimension: Timeliness
+    source: tracking_event
+    schema_anomaly: false
+    count: 1
+    description: every scan of one country and day arrives the next morning (scanner gateway outage)
+  shipment_extra_unit:
+    eligible: shipment messages
+    rule: R1
+    dq_dimension: Completeness
+    source: veloship_shipment
+    schema_anomaly: false
+    rate: 0.01
+    description: request has one more ShipmentUnit than the TrackIDs in the response
+  lead_country_not_iso2:
+    eligible: leads
+    rule: LEAD_COUNTRY_ISO2
+    dq_dimension: Validity
+    source: crm_object
+    schema_anomaly: false
+    rate: 0.02
+    description: lead Country is not an ISO 3166-1 alpha-2 code (e.g. Spain, España)
+  overlapping_tariff:
+    eligible: open-ended tariffs with a single version
+    rule: R14
+    dq_dimension: Consistency
+    source: tariff
+    schema_anomaly: false
+    rate: 0.01
+    description: new tariff version whose validity overlaps the open version
+  settlement_count_mismatch:
+    eligible: settlements
+    rule: R11
+    dq_dimension: Accuracy
+    source: partner_settlement
+    schema_anomaly: false
+    rate: 0.05
+    description: settlement deliveredParcels differs from the DELIVERED scans of the partner, zone and month
+  positive_credit_notes:
+    eligible: country x month groups of credit notes (1.5-4% ledger gap)
+    rule: R9
+    dq_dimension: Accuracy
+    source: invoice
+    schema_anomaly: false
+    count: 1
+    description: every credit note of one country and month sent with positive amounts (ledger off by 2-3%, R13)
+  credit_note_without_related:
+    eligible: credit notes
+    rule: SCHEMA
+    dq_dimension: Completeness
+    source: invoice
+    schema_anomaly: true
+    rate: 0.10
+    description: credit note without relatedInvoiceNumber
+  invoiced_without_pickup:
+    eligible: cancelled parcels of customers with an invoice that month
+    rule: R2
+    dq_dimension: Consistency
+    source: invoice
+    schema_anomaly: false
+    rate: 0.02
+    description: cancelled parcel (never picked up) billed on the customer's invoice
+  delivered_without_invoice:
+    eligible: delivered, never credited parcels on invoices with 2+ lines
+    rule: R2
+    dq_dimension: Consistency
+    source: invoice
+    schema_anomaly: false
+    rate: 0.0005
+    description: delivered parcel missing from the customer's invoice
+  unknown_customer_invoice:
+    eligible: invoices
+    rule: R2
+    dq_dimension: Consistency
+    source: invoice
+    schema_anomaly: false
+    rate: 0.015
+    description: invoice for a contactId that does not exist in master data (gold unknown member)
