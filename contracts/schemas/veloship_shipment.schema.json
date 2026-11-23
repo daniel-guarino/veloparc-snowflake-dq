@@ -1,0 +1,284 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:veloparc-study:source:veloship_shipment",
+  "title": "VeloShip shipment message",
+  "description": "Uma mensagem por expedição: pedido enviado à API VeloShip e resposta com um TrackID por volume. Destino bronze: BRONZE.RAW_VELOSHIP_SHIPMENTS.",
+  "type": "object",
+  "required": [
+    "messageId",
+    "receivedAt",
+    "request",
+    "response"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "messageId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "receivedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "request": {
+      "type": "object",
+      "required": [
+        "Shipment"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "Shipment": {
+          "type": "object",
+          "required": [
+            "ShippingDate",
+            "Product",
+            "Middleware",
+            "Shipper",
+            "Consignee",
+            "ShipmentUnit"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "ShipmentReference": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "maxLength": 40
+              },
+              "minItems": 1,
+              "maxItems": 3,
+              "examples": [
+                [
+                  "ORD-2026-118734"
+                ]
+              ]
+            },
+            "ShippingDate": {
+              "type": "string",
+              "format": "date"
+            },
+            "IncotermCode": {
+              "type": "string",
+              "pattern": "^[0-9]{2}$",
+              "description": "Obrigatório entre zonas comerciais diferentes",
+              "examples": [
+                "10",
+                "20",
+                "30"
+              ]
+            },
+            "Product": {
+              "type": "string",
+              "enum": [
+                "PARCEL",
+                "EXPRESS",
+                "FREIGHT"
+              ]
+            },
+            "Middleware": {
+              "type": "string",
+              "maxLength": 40,
+              "examples": [
+                "SAP",
+                "Primavera",
+                "Shopify",
+                "WooCommerce"
+              ]
+            },
+            "Shipper": {
+              "type": "object",
+              "required": [
+                "ContactID"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "ContactID": {
+                  "type": "string",
+                  "pattern": "^[0-9A-Z]{10}$",
+                  "description": "Identificador do expedidor atribuído pela Veloparc (ContactID). Formato fictício.",
+                  "examples": [
+                    "351000123A"
+                  ]
+                }
+              }
+            },
+            "Consignee": {
+              "type": "object",
+              "required": [
+                "Address"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "ConsigneeID": {
+                  "type": "string",
+                  "maxLength": 40
+                },
+                "Address": {
+                  "type": "object",
+                  "required": [
+                    "Name1",
+                    "CountryCode",
+                    "ZIPCode",
+                    "City",
+                    "Street"
+                  ],
+                  "additionalProperties": false,
+                  "properties": {
+                    "Name1": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 40
+                    },
+                    "CountryCode": {
+                      "type": "string",
+                      "pattern": "^[A-Z]{2}$",
+                      "description": "ISO 3166-1 alpha-2",
+                      "examples": [
+                        "PT",
+                        "ES",
+                        "DE",
+                        "FR",
+                        "PL"
+                      ]
+                    },
+                    "ZIPCode": {
+                      "type": "string",
+                      "minLength": 3,
+                      "maxLength": 10
+                    },
+                    "City": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 40
+                    },
+                    "Street": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 40
+                    },
+                    "StreetNumber": {
+                      "type": "string",
+                      "maxLength": 10
+                    }
+                  }
+                }
+              }
+            },
+            "ShipmentUnit": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 10,
+              "items": {
+                "type": "object",
+                "required": [
+                  "Weight"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "ShipmentUnitReference": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "maxLength": 40
+                    }
+                  },
+                  "Weight": {
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "maximum": 30,
+                    "description": "kg. Limite de 30 kg é um pressuposto do case."
+                  },
+                  "Service": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "Service"
+                      ],
+                      "additionalProperties": false,
+                      "properties": {
+                        "Service": {
+                          "type": "object",
+                          "required": [
+                            "ServiceName"
+                          ],
+                          "additionalProperties": false,
+                          "properties": {
+                            "ServiceName": {
+                              "type": "string",
+                              "enum": [
+                                "service_flexible_delivery",
+                                "service_shop_delivery",
+                                "service_carbon_neutral",
+                                "service_addressee_only",
+                                "service_guaranteed_24h"
+                              ]
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "response": {
+      "type": "object",
+      "required": [
+        "CreatedShipment"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "CreatedShipment": {
+          "type": "object",
+          "required": [
+            "ParcelData"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "ParcelData": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 10,
+              "items": {
+                "type": "object",
+                "required": [
+                  "TrackID",
+                  "ParcelNumber"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "TrackID": {
+                    "type": "string",
+                    "pattern": "^[A-Z0-9]{8}$",
+                    "description": "TrackID Veloparc. Formato fictício de 8 caracteres.",
+                    "examples": [
+                      "ZK7Q2M9P"
+                    ]
+                  },
+                  "ParcelNumber": {
+                    "type": "string",
+                    "pattern": "^[0-9]{11}$"
+                  },
+                  "SSCC": {
+                    "type": "string",
+                    "pattern": "^[0-9]{18}$",
+                    "description": "GS1 Serial Shipping Container Code (18 dígitos, o último é dígito de controlo)",
+                    "examples": [
+                      "356012340000000018"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "$comment": "Regra que o schema não exprime: len(ParcelData) == len(ShipmentUnit)."
+}

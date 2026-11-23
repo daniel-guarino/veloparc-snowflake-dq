@@ -1,0 +1,165 @@
+Project veloparc_gold_star {
+  database_type: 'Snowflake'
+  Note: 'Camada gold: esquema em estrela (factos e dimensões) que alimenta os data products de Sales & Finance da Veloparc. Dados fictícios.'
+}
+
+Table gold.dim_date {
+  date_key int [pk, note: 'YYYYMMDD']
+  full_date date [not null]
+  year int
+  month int
+  period varchar [note: 'YYYY-MM']
+  iso_week int
+  is_weekend boolean
+}
+
+Table gold.dim_customer {
+  customer_sk int [pk, note: 'chave substituta (SCD2)']
+  contact_id varchar [not null, note: 'chave natural VeloShip']
+  group_customer_id varchar
+  customer_name varchar
+  country_code char(2)
+  segment varchar
+  vat_number varchar
+  valid_from timestamp [not null]
+  valid_to timestamp
+  is_current boolean [not null]
+}
+
+Table gold.dim_depot {
+  depot_gln char(13) [pk]
+  depot_name varchar
+  depot_type varchar [note: 'HUB, DEPOT, PARCELSHOP, LOCKER']
+  country_code char(2)
+  city varchar
+}
+
+Table gold.dim_partner_zone {
+  partner_zone_sk int [pk]
+  partner_id varchar [not null]
+  zone_code varchar [not null]
+  partner_name varchar
+  country_code char(2)
+  base_depot_gln char(13)
+}
+
+Table gold.dim_tariff {
+  tariff_sk int [pk, note: 'um registo por tarifa e escalão de peso']
+  tariff_id varchar [not null]
+  customer_sk int
+  product varchar
+  zone_code varchar
+  weight_from_kg decimal(6,2)
+  weight_to_kg decimal(6,2)
+  price decimal(10,2)
+  currency char(3)
+  fuel_surcharge_pct decimal(5,2)
+  valid_from date
+  valid_to date
+}
+
+Table gold.fct_parcel {
+  track_id varchar [pk, note: 'grão: uma linha por encomenda']
+  customer_sk int [not null]
+  partner_zone_sk int
+  shipping_date_key int [not null]
+  parcel_number varchar
+  sscc char(18)
+  product varchar
+  incoterm_code varchar
+  consignee_country char(2)
+  weight_kg decimal(8,2)
+  pickup_ts timestamp
+  delivered_ts timestamp
+  is_delivered boolean
+}
+
+Table gold.fct_parcel_event {
+  event_id varchar [pk, note: 'grão: uma linha por leitura']
+  track_id varchar [not null]
+  depot_gln char(13)
+  event_date_key int [not null]
+  status varchar [not null]
+  event_ts timestamp [not null]
+  reason_code varchar
+  capture_delay_min int
+}
+
+Table gold.fct_invoice_line {
+  invoice_number varchar [not null]
+  line_no int [not null]
+  customer_sk int [not null]
+  tariff_sk int
+  track_id varchar
+  invoice_date_key int [not null]
+  doc_type varchar
+  billing_period varchar
+  currency char(3)
+  amount_local decimal(12,2)
+  fx_rate_eur decimal(12,6)
+  amount_eur decimal(12,2)
+  fuel_surcharge_eur decimal(12,2)
+
+  indexes {
+    (invoice_number, line_no) [pk]
+  }
+}
+
+Table gold.fct_partner_cost {
+  settlement_id varchar [pk, note: 'grão: parceiro, zona e mês']
+  partner_zone_sk int [not null]
+  period varchar [not null]
+  stops int
+  delivered_parcels int
+  failed_attempts int
+  total_cost_eur decimal(12,2)
+}
+
+Table gold.fct_gl_revenue {
+  company_code varchar [not null]
+  period varchar [not null]
+  gl_account varchar [not null]
+  country_code char(2)
+  amount_eur decimal(14,2)
+
+  indexes {
+    (company_code, period, gl_account) [pk]
+  }
+}
+
+Table gold.fct_opportunity {
+  opportunity_id varchar [pk]
+  customer_sk int [note: 'nulo se ainda não é cliente']
+  close_date_key int
+  stage varchar
+  amount_eur decimal(14,2)
+  country_code char(2)
+  expected_parcels_month int
+}
+
+Table gold.fct_lead {
+  lead_id varchar [pk]
+  created_date_key int
+  converted_opportunity_id varchar
+  country_code char(2)
+  lead_source varchar
+  status varchar
+}
+
+Ref: gold.fct_parcel.customer_sk > gold.dim_customer.customer_sk
+Ref: gold.fct_parcel.partner_zone_sk > gold.dim_partner_zone.partner_zone_sk
+Ref: gold.fct_parcel.shipping_date_key > gold.dim_date.date_key
+Ref: gold.fct_parcel_event.track_id > gold.fct_parcel.track_id
+Ref: gold.fct_parcel_event.depot_gln > gold.dim_depot.depot_gln
+Ref: gold.fct_parcel_event.event_date_key > gold.dim_date.date_key
+Ref: gold.fct_invoice_line.customer_sk > gold.dim_customer.customer_sk
+Ref: gold.fct_invoice_line.tariff_sk > gold.dim_tariff.tariff_sk
+Ref: gold.fct_invoice_line.track_id > gold.fct_parcel.track_id
+Ref: gold.fct_invoice_line.invoice_date_key > gold.dim_date.date_key
+Ref: gold.dim_tariff.customer_sk > gold.dim_customer.customer_sk
+Ref: gold.fct_partner_cost.partner_zone_sk > gold.dim_partner_zone.partner_zone_sk
+Ref: gold.fct_opportunity.customer_sk > gold.dim_customer.customer_sk
+Ref: gold.fct_opportunity.close_date_key > gold.dim_date.date_key
+Ref: gold.fct_lead.converted_opportunity_id - gold.fct_opportunity.opportunity_id
+Ref: gold.fct_lead.created_date_key > gold.dim_date.date_key
+Ref: gold.dim_partner_zone.base_depot_gln > gold.dim_depot.depot_gln

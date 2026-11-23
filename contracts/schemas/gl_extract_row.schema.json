@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:veloparc-study:source:gl_extract_row",
+  "title": "General ledger extract row",
+  "description": "Uma linha do CSV mensal do ERP (cabeçalho: company_code,country_code,period,gl_account,account_name,amount_eur). Valida cada linha convertida em objeto. Destino bronze: BRONZE.RAW_GL_EXTRACT.",
+  "type": "object",
+  "required": [
+    "company_code",
+    "country_code",
+    "period",
+    "gl_account",
+    "account_name",
+    "amount_eur"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "company_code": {
+      "type": "string",
+      "pattern": "^VLP_[A-Z]{2}$"
+    },
+    "country_code": {
+      "type": "string",
+      "pattern": "^[A-Z]{2}$",
+      "description": "ISO 3166-1 alpha-2",
+      "examples": [
+        "PT",
+        "ES",
+        "DE",
+        "FR",
+        "PL"
+      ]
+    },
+    "period": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$",
+      "description": "Mês YYYY-MM"
+    },
+    "gl_account": {
+      "type": "string",
+      "pattern": "^[0-9]{6}$",
+      "examples": [
+        "700100",
+        "700200",
+        "700900"
+      ]
+    },
+    "account_name": {
+      "type": "string",
+      "enum": [
+        "Parcel revenue domestic",
+        "Parcel revenue international",
+        "Revenue adjustments"
+      ]
+    },
+    "amount_eur": {
+      "type": "number",
+      "description": "Valor monetário com 2 casas decimais (verificado nas regras de qualidade: multipleOf falha com vírgula flutuante)"
+    }
+  },
+  "$comment": "Regras que o schema não exprime: um ficheiro por company_code e period; company_code VLP_XX coerente com country_code XX."
+}

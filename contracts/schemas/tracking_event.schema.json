@@ -1,0 +1,169 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:veloparc-study:source:tracking_event",
+  "title": "Parcel tracking event (EPCIS-style)",
+  "description": "Um evento por leitura de scanner: o quê (trackId/epcList), quando (eventTime), onde (bizLocation.gln), porquê (bizStep/status/reasonCode). Destino bronze: BRONZE.RAW_TRACKING_EVENTS.",
+  "type": "object",
+  "required": [
+    "eventId",
+    "eventType",
+    "eventTime",
+    "recordTime",
+    "trackId",
+    "status"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "eventId": {
+      "type": "string",
+      "pattern": "^evt-[0-9a-f]{8}-[0-9]{4}$"
+    },
+    "eventType": {
+      "const": "ObjectEvent"
+    },
+    "eventTime": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Hora local com offset (ex.: +01:00)"
+    },
+    "recordTime": {
+      "type": "string",
+      "format": "date-time",
+      "description": "UTC, >= eventTime"
+    },
+    "trackId": {
+      "type": "string",
+      "pattern": "^[A-Z0-9]{8}$",
+      "description": "TrackID Veloparc. Formato fictício de 8 caracteres.",
+      "examples": [
+        "ZK7Q2M9P"
+      ]
+    },
+    "epcList": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1,
+      "items": {
+        "type": "string",
+        "pattern": "^urn:epc:id:sscc:[0-9]{7}\\.[0-9]{10}$"
+      }
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "DATA_RECEIVED",
+        "PICKUP",
+        "HUB",
+        "IN_DELIVERY",
+        "DELIVERED",
+        "CANCELLED",
+        "NOT_DELIVERED",
+        "PARCELSHOP"
+      ],
+      "description": "Estados da API VeloShip + NOT_DELIVERED e PARCELSHOP (pressupostos do case)"
+    },
+    "bizStep": {
+      "type": "string",
+      "enum": [
+        "urn:epcglobal:cbv:bizstep:accepting",
+        "urn:epcglobal:cbv:bizstep:arriving",
+        "urn:epcglobal:cbv:bizstep:departing",
+        "urn:epcglobal:cbv:bizstep:loading",
+        "urn:epcglobal:cbv:bizstep:receiving",
+        "urn:epcglobal:cbv:bizstep:shipping"
+      ]
+    },
+    "bizLocation": {
+      "type": "object",
+      "required": [
+        "gln"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "gln": {
+          "type": "string",
+          "pattern": "^[0-9]{13}$",
+          "description": "GS1 Global Location Number (13 dígitos, o último é dígito de controlo)",
+          "examples": [
+            "5601234000017"
+          ]
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 60
+        }
+      }
+    },
+    "reasonCode": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        null,
+        "NOT_HOME",
+        "REFUSED",
+        "ADDRESS_ERROR",
+        "DAMAGED",
+        "CUSTOMS_HOLD"
+      ],
+      "description": "Preenchido só em NOT_DELIVERED (pressuposto do case)"
+    },
+    "device": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "scannerId": {
+          "type": "string",
+          "pattern": "^SCN-[A-Z]{2}-[0-9]{4}$"
+        },
+        "firmware": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "DATA_RECEIVED"
+          }
+        }
+      },
+      "then": {
+        "not": {
+          "required": [
+            "bizLocation"
+          ]
+        }
+      },
+      "else": {
+        "required": [
+          "bizLocation"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "NOT_DELIVERED"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "reasonCode": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "reasonCode"
+        ]
+      }
+    }
+  ],
+  "$comment": "Regras que o schema não exprime: sequência DATA_RECEIVED → PICKUP → HUB* → IN_DELIVERY → DELIVERED; CANCELLED só antes de PICKUP; sem repetição de (trackId, status, gln)."
+}

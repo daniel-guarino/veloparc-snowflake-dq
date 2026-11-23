@@ -1,0 +1,238 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:veloparc-study:source:invoice",
+  "title": "Invoice or credit note",
+  "description": "Um documento por fatura ou nota de crédito, com linhas por encomenda e sobretaxas por linha. Destino bronze: BRONZE.RAW_INVOICES.",
+  "type": "object",
+  "required": [
+    "invoiceNumber",
+    "docType",
+    "issueDate",
+    "billingPeriod",
+    "customer",
+    "currency",
+    "fxRateToEur",
+    "lines",
+    "totals"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "invoiceNumber": {
+      "type": "string",
+      "pattern": "^[A-Z]{2}-[0-9]{4}-[0-9]{7}$",
+      "examples": [
+        "PT-2026-0045871"
+      ]
+    },
+    "docType": {
+      "type": "string",
+      "enum": [
+        "INVOICE",
+        "CREDIT_NOTE"
+      ]
+    },
+    "issueDate": {
+      "type": "string",
+      "format": "date"
+    },
+    "billingPeriod": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$",
+      "description": "Mês YYYY-MM"
+    },
+    "relatedInvoiceNumber": {
+      "type": "string",
+      "description": "Obrigatório em CREDIT_NOTE"
+    },
+    "customer": {
+      "type": "object",
+      "required": [
+        "contactId",
+        "vatNumber"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "contactId": {
+          "type": "string",
+          "pattern": "^[0-9A-Z]{10}$",
+          "description": "Identificador do expedidor atribuído pela Veloparc (ContactID). Formato fictício.",
+          "examples": [
+            "351000123A"
+          ]
+        },
+        "vatNumber": {
+          "type": "string",
+          "pattern": "^[A-Z]{2}[0-9A-Z]{8,12}$"
+        }
+      }
+    },
+    "currency": {
+      "type": "string",
+      "enum": [
+        "EUR",
+        "PLN",
+        "CZK",
+        "HUF",
+        "DKK",
+        "RON"
+      ],
+      "description": "ISO 4217 (moedas dos países Veloparc do case)"
+    },
+    "fxRateToEur": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "lines": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 5000,
+      "items": {
+        "type": "object",
+        "required": [
+          "lineNo",
+          "trackId",
+          "tariffId",
+          "product",
+          "weightKg",
+          "zone",
+          "basePrice",
+          "netAmount"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "lineNo": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "trackId": {
+            "type": "string",
+            "pattern": "^[A-Z0-9]{8}$",
+            "description": "TrackID Veloparc. Formato fictício de 8 caracteres.",
+            "examples": [
+              "ZK7Q2M9P"
+            ]
+          },
+          "tariffId": {
+            "type": "string",
+            "pattern": "^TRF-[0-9A-Z]{10}-(PARCEL|EXPRESS|FREIGHT)-Z[0-9]-[0-9]{4}$",
+            "examples": [
+              "TRF-351000123A-PARCEL-Z1-0002"
+            ]
+          },
+          "product": {
+            "type": "string",
+            "enum": [
+              "PARCEL",
+              "EXPRESS",
+              "FREIGHT"
+            ]
+          },
+          "weightKg": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 30
+          },
+          "zone": {
+            "type": "string",
+            "pattern": "^[A-Z]{2}-Z[0-9]$",
+            "description": "Zona postal: país + zona",
+            "examples": [
+              "PT-Z1",
+              "ES-Z3"
+            ]
+          },
+          "basePrice": {
+            "type": "number",
+            "description": "Valor monetário com 2 casas decimais (verificado nas regras de qualidade: multipleOf falha com vírgula flutuante)"
+          },
+          "surcharges": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "type",
+                "amount"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "FUEL",
+                    "PEAK",
+                    "TOLL",
+                    "REMOTE_AREA"
+                  ]
+                },
+                "amount": {
+                  "type": "number",
+                  "description": "Valor monetário com 2 casas decimais (verificado nas regras de qualidade: multipleOf falha com vírgula flutuante)"
+                }
+              }
+            }
+          },
+          "netAmount": {
+            "type": "number",
+            "description": "Valor monetário com 2 casas decimais (verificado nas regras de qualidade: multipleOf falha com vírgula flutuante)"
+          }
+        }
+      }
+    },
+    "totals": {
+      "type": "object",
+      "required": [
+        "net",
+        "vat",
+        "gross"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "net": {
+          "type": "number",
+          "description": "Valor monetário com 2 casas decimais (verificado nas regras de qualidade: multipleOf falha com vírgula flutuante)"
+        },
+        "vat": {
+          "type": "number",
+          "description": "Valor monetário com 2 casas decimais (verificado nas regras de qualidade: multipleOf falha com vírgula flutuante)"
+        },
+        "gross": {
+          "type": "number",
+          "description": "Valor monetário com 2 casas decimais (verificado nas regras de qualidade: multipleOf falha com vírgula flutuante)"
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "docType": {
+            "const": "CREDIT_NOTE"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "relatedInvoiceNumber"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "currency": {
+            "const": "EUR"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "fxRateToEur": {
+            "const": 1.0
+          }
+        }
+      }
+    }
+  ],
+  "$comment": "Regras que o schema não exprime: netAmount = basePrice + soma(surcharges); totals.net = soma(lines.netAmount); gross = net + vat; em CREDIT_NOTE os valores são negativos; lineNo sequencial e único."
+}

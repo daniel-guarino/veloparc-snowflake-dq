@@ -1,0 +1,67 @@
+# --- Secrets: never commit ---
+.env
+.env.*
+!.env.example
+*.p8
+*.pem
+*.key
+*.pfx
+*.p12
+*.jks
+*.keystore
+*.truststore
+rsa_key*
+id_rsa*
+credentials
+credentials.json
+service-account*.json
+connect/secrets/
+**/aiven/*.crt
+**/aiven/*.key
+.aws/
+.snowflake/
+profiles.yml
+!dbt/veloparc/profiles.example.yml
+
+# --- Terraform ---
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+crash.log
+.terraform.lock.hcl
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
+dist/
+build/
+
+# --- Generator output and state ---
+out/
+state/
+generator/out/
+generator/state/
+
+# --- dbt ---
+dbt/veloparc/target/
+dbt/veloparc/dbt_packages/
+dbt/veloparc/logs/
+logs/
+
+# --- Editors / OS ---
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+# --- Claude Code local settings ---
+.claude/settings.local.json

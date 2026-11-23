@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:veloparc-study:source:partner_settlement",
+  "title": "Last-mile partner monthly settlement",
+  "description": "Uma liquidação mensal por parceiro de última milha e zona. Destino bronze: BRONZE.RAW_PARTNER_SETTLEMENTS.",
+  "type": "object",
+  "required": [
+    "settlementId",
+    "partnerId",
+    "period",
+    "zone",
+    "currency",
+    "stops",
+    "deliveredParcels",
+    "costPerStop",
+    "totalCost"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "settlementId": {
+      "type": "string",
+      "pattern": "^STL-[A-Z]{2}-[0-9]{4}-[0-9]{2}-P[0-9]{3}-Z[0-9]$"
+    },
+    "partnerId": {
+      "type": "string",
+      "pattern": "^P[0-9]{3}$"
+    },
+    "partnerName": {
+      "type": "string",
+      "maxLength": 80
+    },
+    "period": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$",
+      "description": "Mês YYYY-MM"
+    },
+    "zone": {
+      "type": "string",
+      "pattern": "^[A-Z]{2}-Z[0-9]$",
+      "description": "Zona postal: país + zona",
+      "examples": [
+        "PT-Z1",
+        "ES-Z3"
+      ]
+    },
+    "currency": {
+      "type": "string",
+      "enum": [
+        "EUR",
+        "PLN",
+        "CZK",
+        "HUF",
+        "DKK",
+        "RON"
+      ],
+      "description": "ISO 4217 (moedas dos países Veloparc do case)"
+    },
+    "stops": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "deliveredParcels": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "failedAttempts": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "costPerStop": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "maximum": 10
+    },
+    "totalCost": {
+      "type": "number",
+      "description": "Valor monetário com 2 casas decimais (verificado nas regras de qualidade: multipleOf falha com vírgula flutuante)"
+    }
+  },
+  "$comment": "Regras que o schema não exprime: totalCost = stops × costPerStop; deliveredParcels >= stops (várias encomendas por paragem); deliveredParcels = eventos DELIVERED do parceiro na zona e mês."
+}

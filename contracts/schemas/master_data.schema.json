@@ -1,0 +1,189 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:veloparc-study:source:master_data",
+  "title": "Master data object (customer, depot or partner)",
+  "description": "Três tipos de objeto distinguidos por 'entity'. Destino bronze: BRONZE.RAW_MASTER_DATA.",
+  "oneOf": [
+    {
+      "type": "object",
+      "required": [
+        "entity",
+        "contactId",
+        "groupCustomerId",
+        "name",
+        "countryCode",
+        "segment",
+        "vatNumber",
+        "updatedAt"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "entity": {
+          "const": "customer"
+        },
+        "contactId": {
+          "type": "string",
+          "pattern": "^[0-9A-Z]{10}$",
+          "description": "Identificador do expedidor atribuído pela Veloparc (ContactID). Formato fictício.",
+          "examples": [
+            "351000123A"
+          ]
+        },
+        "groupCustomerId": {
+          "type": "string",
+          "pattern": "^GRP-[0-9]{6}$"
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "countryCode": {
+          "type": "string",
+          "pattern": "^[A-Z]{2}$",
+          "description": "ISO 3166-1 alpha-2",
+          "examples": [
+            "PT",
+            "ES",
+            "DE",
+            "FR",
+            "PL"
+          ]
+        },
+        "segment": {
+          "type": "string",
+          "enum": [
+            "B2B_SHIPPER",
+            "B2C_SHIPPER",
+            "MARKETPLACE"
+          ]
+        },
+        "vatNumber": {
+          "type": "string",
+          "pattern": "^[A-Z]{2}[0-9A-Z]{8,12}$"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "required": [
+        "entity",
+        "gln",
+        "name",
+        "type",
+        "countryCode",
+        "city"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "entity": {
+          "const": "depot"
+        },
+        "gln": {
+          "type": "string",
+          "pattern": "^[0-9]{13}$",
+          "description": "GS1 Global Location Number (13 dígitos, o último é dígito de controlo)",
+          "examples": [
+            "5601234000017"
+          ]
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 60
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "HUB",
+            "DEPOT",
+            "PARCELSHOP",
+            "LOCKER"
+          ]
+        },
+        "countryCode": {
+          "type": "string",
+          "pattern": "^[A-Z]{2}$",
+          "description": "ISO 3166-1 alpha-2",
+          "examples": [
+            "PT",
+            "ES",
+            "DE",
+            "FR",
+            "PL"
+          ]
+        },
+        "city": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "postalCode": {
+          "type": "string",
+          "maxLength": 10
+        }
+      }
+    },
+    {
+      "type": "object",
+      "required": [
+        "entity",
+        "partnerId",
+        "name",
+        "countryCode",
+        "zones",
+        "baseDepotGln"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "entity": {
+          "const": "partner"
+        },
+        "partnerId": {
+          "type": "string",
+          "pattern": "^P[0-9]{3}$"
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "countryCode": {
+          "type": "string",
+          "pattern": "^[A-Z]{2}$",
+          "description": "ISO 3166-1 alpha-2",
+          "examples": [
+            "PT",
+            "ES",
+            "DE",
+            "FR",
+            "PL"
+          ]
+        },
+        "zones": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Z]{2}-Z[0-9]$",
+            "description": "Zona postal: país + zona",
+            "examples": [
+              "PT-Z1",
+              "ES-Z3"
+            ]
+          }
+        },
+        "baseDepotGln": {
+          "type": "string",
+          "pattern": "^[0-9]{13}$",
+          "description": "GS1 Global Location Number (13 dígitos, o último é dígito de controlo)",
+          "examples": [
+            "5601234000017"
+          ]
+        }
+      }
+    }
+  ],
+  "$comment": "Regras que o schema não exprime: dígito de controlo GS1 do GLN; prefixo do vatNumber = countryCode; cada zona com exatamente um parceiro; baseDepotGln existe como depot."
+}

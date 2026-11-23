@@ -1,0 +1,210 @@
+Project veloparc_silver {
+  database_type: 'Snowflake'
+  Note: 'Camada silver: JSON resolvido. Uma tabela por entidade da fonte; arrays desdobrados em tabelas filhas; tipos e nomes limpos. Dados fictícios.'
+}
+
+Table silver.veloship_shipment {
+  message_id varchar [pk]
+  shipment_reference varchar
+  shipping_date date
+  incoterm_code varchar
+  product varchar
+  middleware varchar
+  contact_id varchar [not null]
+  consignee_id varchar
+  consignee_name varchar
+  consignee_country char(2)
+  consignee_zip varchar
+  consignee_city varchar
+  received_at timestamp
+  _loaded_at timestamp
+}
+
+Table silver.veloship_parcel {
+  track_id varchar [pk]
+  message_id varchar [not null]
+  unit_index int [not null]
+  shipment_unit_reference varchar
+  parcel_number varchar
+  sscc char(18)
+  weight_kg decimal(8,2)
+  services variant
+}
+
+Table silver.tracking_event {
+  event_id varchar [pk]
+  event_type varchar
+  track_id varchar [not null]
+  sscc char(18)
+  status varchar [not null]
+  biz_step varchar
+  event_time_utc timestamp [not null]
+  event_tz_offset varchar
+  record_time_utc timestamp
+  location_gln char(13)
+  location_name varchar
+  reason_code varchar
+  scanner_id varchar
+  _loaded_at timestamp
+}
+
+Table silver.invoice {
+  invoice_number varchar [pk]
+  doc_type varchar [not null]
+  issue_date date
+  billing_period varchar
+  contact_id varchar [not null]
+  vat_number varchar
+  currency char(3)
+  fx_rate_to_eur decimal(12,6)
+  total_net decimal(12,2)
+  total_vat decimal(12,2)
+  total_gross decimal(12,2)
+}
+
+Table silver.invoice_line {
+  invoice_number varchar [not null]
+  line_no int [not null]
+  track_id varchar
+  tariff_id varchar
+  product varchar
+  weight_kg decimal(8,2)
+  zone_code varchar
+  base_price decimal(12,2)
+  net_amount decimal(12,2)
+
+  indexes {
+    (invoice_number, line_no) [pk]
+  }
+}
+
+Table silver.invoice_surcharge {
+  invoice_number varchar [not null]
+  line_no int [not null]
+  surcharge_index int [not null]
+  surcharge_type varchar [not null]
+  amount decimal(12,2)
+
+  indexes {
+    (invoice_number, line_no, surcharge_index) [pk]
+  }
+}
+
+Table silver.crm_opportunity {
+  opportunity_id varchar [pk]
+  account_id varchar
+  contact_id varchar
+  opportunity_name varchar
+  stage varchar
+  amount decimal(14,2)
+  currency char(3)
+  close_date date
+  country_code char(2)
+  expected_parcels_month int
+  last_modified_at timestamp
+}
+
+Table silver.crm_lead {
+  lead_id varchar [pk]
+  company_name varchar
+  country_raw varchar
+  country_code char(2) [note: 'normalizado a ISO']
+  lead_source varchar
+  status varchar
+  converted_opportunity_id varchar
+  created_at timestamp
+}
+
+Table silver.partner_settlement {
+  settlement_id varchar [pk]
+  partner_id varchar [not null]
+  zone_code varchar
+  period varchar
+  currency char(3)
+  stops int
+  delivered_parcels int
+  failed_attempts int
+  cost_per_stop decimal(8,2)
+  total_cost decimal(12,2)
+}
+
+Table silver.tariff {
+  tariff_id varchar [pk]
+  contact_id varchar [not null]
+  product varchar
+  zone_code varchar
+  currency char(3)
+  fuel_surcharge_pct decimal(5,2)
+  valid_from date
+  valid_to date
+}
+
+Table silver.tariff_weight_band {
+  tariff_id varchar [not null]
+  band_index int [not null]
+  from_kg decimal(6,2)
+  to_kg decimal(6,2)
+  price decimal(10,2)
+
+  indexes {
+    (tariff_id, band_index) [pk]
+  }
+}
+
+Table silver.gl_balance {
+  company_code varchar [not null]
+  country_code char(2)
+  period varchar [not null]
+  gl_account varchar [not null]
+  account_name varchar
+  amount_eur decimal(14,2)
+
+  indexes {
+    (company_code, period, gl_account) [pk]
+  }
+}
+
+Table silver.customer {
+  contact_id varchar [not null]
+  updated_at timestamp [not null, note: 'cada versão recebida fica guardada']
+  group_customer_id varchar
+  customer_name varchar
+  country_code char(2)
+  segment varchar
+  vat_number varchar
+
+  indexes {
+    (contact_id, updated_at) [pk]
+  }
+}
+
+Table silver.depot {
+  gln char(13) [pk]
+  depot_name varchar
+  depot_type varchar
+  country_code char(2)
+  city varchar
+  postal_code varchar
+}
+
+Table silver.partner {
+  partner_id varchar [pk]
+  partner_name varchar
+  country_code char(2)
+  base_depot_gln char(13)
+}
+
+Table silver.partner_zone {
+  partner_id varchar [not null]
+  zone_code varchar [not null]
+
+  indexes {
+    (partner_id, zone_code) [pk]
+  }
+}
+
+Ref: silver.veloship_parcel.message_id > silver.veloship_shipment.message_id
+Ref: silver.invoice_line.invoice_number > silver.invoice.invoice_number
+Ref: silver.invoice_surcharge.(invoice_number, line_no) > silver.invoice_line.(invoice_number, line_no)
+Ref: silver.tariff_weight_band.tariff_id > silver.tariff.tariff_id
+Ref: silver.partner_zone.partner_id > silver.partner.partner_id
