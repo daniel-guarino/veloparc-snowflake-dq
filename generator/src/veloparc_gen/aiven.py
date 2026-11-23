@@ -37,8 +37,11 @@ def _http(method: str, url: str, body: dict | None, token: str) -> Any:
 
 class AivenApi:
     def __init__(self, project: str, service: str, token: str = "", transport: Transport | None = None):
-        if not project or not service:
-            raise AivenError("AIVEN_PROJECT and AIVEN_SERVICE are required")
+        missing = [name for name, value in (("AIVEN_PROJECT", project), ("AIVEN_SERVICE", service)) if not value]
+        if missing:
+            raise AivenError(
+                f"missing: {', '.join(missing)} (GitHub Environment dev: Variables tab, or a secret with that name)"
+            )
         self.base = f"{API}/project/{project}/service/{service}"
         if transport is None:
             if not token:
