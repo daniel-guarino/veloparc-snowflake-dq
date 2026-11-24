@@ -1,0 +1,111 @@
+/// Daily DQ scorecard per data product, source, country and dimension.
+table dq_scorecard_daily
+	lineageTag: cd8e1783-e40d-53d8-8989-f160d3d330fc
+
+	/// Data product the source feeds.
+	column data_product
+		dataType: string
+		lineageTag: c2b8bad3-5a16-551a-9aa9-4c22345507e1
+		summarizeBy: none
+		sourceColumn: data_product
+
+		annotation SummarizationSetBy = User
+
+	/// Source (topic) of the records evaluated.
+	column source
+		dataType: string
+		lineageTag: 86aba7a6-919b-54a8-af32-8fd10bc808a3
+		summarizeBy: none
+		sourceColumn: source
+
+		annotation SummarizationSetBy = User
+
+	/// Country of the records; joins dim_country.
+	column country_code
+		dataType: string
+		isHidden
+		lineageTag: b5fce149-adf9-53da-a5ca-707254069dae
+		summarizeBy: none
+		sourceColumn: country_code
+
+		annotation SummarizationSetBy = User
+
+	/// Business date of the records.
+	column day
+		dataType: dateTime
+		formatString: yyyy-mm-dd
+		lineageTag: 9c831b15-c9b3-5ed5-9f40-2695e93f0368
+		summarizeBy: none
+		sourceColumn: day
+
+		annotation SummarizationSetBy = User
+
+		annotation UnderlyingDateTimeDataType = Date
+
+	/// DQ dimension.
+	column dimension
+		dataType: string
+		lineageTag: 9692a7e3-5bf9-5fa6-a42c-a3e40a76853c
+		summarizeBy: none
+		sourceColumn: dimension
+
+		annotation SummarizationSetBy = User
+
+	/// Silver records of the source, country and day.
+	column records_evaluated
+		dataType: int64
+		formatString: #,0
+		lineageTag: 78a4d5a4-2df7-5195-bfca-d49d8a77ba3a
+		summarizeBy: sum
+		sourceColumn: records_evaluated
+
+		annotation SummarizationSetBy = User
+
+	/// Distinct business keys with at least one issue of that dimension.
+	column records_with_issue
+		dataType: int64
+		formatString: #,0
+		lineageTag: 5975e6c3-efc5-587c-9e86-649d73bef8d5
+		summarizeBy: sum
+		sourceColumn: records_with_issue
+
+		annotation SummarizationSetBy = User
+
+	/// 100 x (1 - records_with_issue / records_evaluated), as stored by dbt.
+	column pct_valid
+		dataType: double
+		formatString: 0.000
+		lineageTag: 96efac10-c350-5651-b283-bdff04b1f312
+		summarizeBy: none
+		sourceColumn: pct_valid
+
+		annotation SummarizationSetBy = User
+
+	/// Acceptable pct_valid of the dimension.
+	column threshold_pct
+		dataType: double
+		formatString: 0.0
+		lineageTag: ca42c728-cde9-5f57-ab08-dd4f12e7c45a
+		summarizeBy: none
+		sourceColumn: threshold_pct
+
+		annotation SummarizationSetBy = User
+
+	/// green, amber or red (per row, as stored by dbt).
+	column status
+		dataType: string
+		lineageTag: 9bcdb7cc-2699-5dba-9773-be0984dba47b
+		summarizeBy: none
+		sourceColumn: status
+
+		annotation SummarizationSetBy = User
+
+	partition dq_scorecard_daily = m
+		mode: import
+		source =
+				let
+				    Source = fnVeloparcTable("DQ", "DQ_SCORECARD_DAILY", {{"data_product", type text}, {"source", type text}, {"country_code", type text}, {"day", type date}, {"dimension", type text}, {"records_evaluated", Int64.Type}, {"records_with_issue", Int64.Type}, {"pct_valid", type number}, {"threshold_pct", type number}, {"status", type text}})
+				in
+				    Source
+
+	annotation PBI_ResultType = Table

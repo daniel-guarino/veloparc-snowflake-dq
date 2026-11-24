@@ -1,0 +1,50 @@
+/// Snowflake host. Placeholder: set it locally in Power BI Desktop (Transform data > Edit parameters). Never commit the real account.
+expression SnowflakeServer = "<account>.snowflakecomputing.com" meta [IsParameterQuery = true, Type = "Text", IsParameterQueryRequired = true]
+	lineageTag: 1e03d2bd-98cd-541d-b1c2-5293367c409c
+
+	annotation PBI_ResultType = Text
+
+/// Warehouse used for refreshes.
+expression Warehouse = "WH_ANALYTICS" meta [IsParameterQuery = true, Type = "Text", IsParameterQueryRequired = true]
+	lineageTag: 30a5c9d4-a664-5e6a-b077-f119190fdf34
+
+	annotation PBI_ResultType = Text
+
+/// Role with SELECT on VLP_DP.GOLD and VLP_DP.DQ.
+expression Role = "VLP_READER" meta [IsParameterQuery = true, Type = "Text", IsParameterQueryRequired = true]
+	lineageTag: 496846af-9b9c-5995-838d-ebd8f7193d40
+
+	annotation PBI_ResultType = Text
+
+/// Database of the data products.
+expression Database = "VLP_DP" meta [IsParameterQuery = true, Type = "Text", IsParameterQueryRequired = true]
+	lineageTag: aec34608-f8f0-5269-9717-3fff7c8d1078
+
+	annotation PBI_ResultType = Text
+
+/// Snowflake database navigation (native connector, ADBC implementation 2.0). Credentials stay in Power BI Desktop.
+expression VeloparcDb =
+		let
+		    Source = Snowflake.Databases(SnowflakeServer, Warehouse, [Role = Role, Implementation = "2.0"]),
+		    Db = Source{[Name = Database, Kind = "Database"]}[Data]
+		in
+		    Db
+	lineageTag: 4b6be643-377d-5e57-8b1d-8d1c220b1c4a
+
+	annotation PBI_ResultType = Table
+
+/// Loads one Snowflake table: lower-cases the column names (Snowflake returns upper case), keeps the listed
+/// columns and sets their types. All steps fold to a single SELECT.
+expression fnVeloparcTable =
+		(schemaName as text, tableName as text, columnTypes as list) as table =>
+		let
+		    Schema = VeloparcDb{[Name = schemaName, Kind = "Schema"]}[Data],
+		    Source = Schema{[Name = tableName, Kind = "Table"]}[Data],
+		    Lowered = Table.TransformColumnNames(Source, Text.Lower),
+		    Selected = Table.SelectColumns(Lowered, List.Transform(columnTypes, each _{0})),
+		    Typed = Table.TransformColumnTypes(Selected, columnTypes)
+		in
+		    Typed
+	lineageTag: bb408835-b0e3-54bd-9890-24f545c1bee6
+
+	annotation PBI_ResultType = Function

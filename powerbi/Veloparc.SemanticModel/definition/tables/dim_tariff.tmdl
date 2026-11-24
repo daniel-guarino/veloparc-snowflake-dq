@@ -1,0 +1,142 @@
+/// One row per tariff x weight band; '-1' = unknown.
+table dim_tariff
+	lineageTag: 6ee69116-b725-5e78-a267-55d907338636
+
+	/// Hash surrogate key of tariff x band.
+	column tariff_sk
+		dataType: string
+		isHidden
+		lineageTag: a2fd8d86-ec85-5656-a672-c9427733390b
+		summarizeBy: none
+		sourceColumn: tariff_sk
+
+		annotation SummarizationSetBy = User
+
+	/// Tariff id.
+	column tariff_id
+		dataType: string
+		lineageTag: 2872ad45-a671-5e53-9879-4cf21446c420
+		summarizeBy: none
+		sourceColumn: tariff_id
+
+		annotation SummarizationSetBy = User
+
+	/// Band position.
+	column band_index
+		dataType: int64
+		lineageTag: 355be505-7ad5-5346-a824-d0a824db15d1
+		summarizeBy: none
+		sourceColumn: band_index
+
+		annotation SummarizationSetBy = User
+
+	/// Customer version valid at valid_from.
+	column customer_sk
+		dataType: string
+		isHidden
+		lineageTag: dc5a9e65-fc56-5ef2-bf6d-fa3fbed6e559
+		summarizeBy: none
+		sourceColumn: customer_sk
+
+		annotation SummarizationSetBy = User
+
+	/// Product.
+	column product
+		dataType: string
+		lineageTag: c8569a09-d7dd-575d-8094-e28b3048cc53
+		summarizeBy: none
+		sourceColumn: product
+
+		annotation SummarizationSetBy = User
+
+	/// Zone.
+	column zone_code
+		dataType: string
+		lineageTag: ab2b52cb-8d9f-5771-ae01-d0bc39565a94
+		summarizeBy: none
+		sourceColumn: zone_code
+
+		annotation SummarizationSetBy = User
+
+	/// Band lower bound (exclusive).
+	column weight_from_kg
+		dataType: double
+		formatString: 0.00
+		lineageTag: 8a270d49-0ccc-5c27-8622-fd685a3445dd
+		summarizeBy: none
+		sourceColumn: weight_from_kg
+
+		annotation SummarizationSetBy = User
+
+	/// Band upper bound (inclusive).
+	column weight_to_kg
+		dataType: double
+		formatString: 0.00
+		lineageTag: 70491d32-d3e9-5fca-94c3-764ad6764b8a
+		summarizeBy: none
+		sourceColumn: weight_to_kg
+
+		annotation SummarizationSetBy = User
+
+	/// Band price, tariff currency.
+	column price
+		dataType: decimal
+		formatString: #,0.00
+		lineageTag: 129aa046-e2c5-5d58-a757-d3ca600d9dfc
+		summarizeBy: none
+		sourceColumn: price
+
+		annotation SummarizationSetBy = User
+
+	/// Currency.
+	column currency
+		dataType: string
+		lineageTag: 4e42cda5-078c-52d0-9c5a-aafd109fcf42
+		summarizeBy: none
+		sourceColumn: currency
+
+		annotation SummarizationSetBy = User
+
+	/// Fuel surcharge, percentage points.
+	column fuel_surcharge_pct
+		dataType: double
+		formatString: 0.00
+		lineageTag: 165707b4-df08-5dde-b555-7c0ef9b55ed3
+		summarizeBy: none
+		sourceColumn: fuel_surcharge_pct
+
+		annotation SummarizationSetBy = User
+
+	/// Validity start.
+	column valid_from
+		dataType: dateTime
+		formatString: yyyy-mm-dd
+		lineageTag: 98db4012-3e49-536d-817a-b9280fad2b92
+		summarizeBy: none
+		sourceColumn: valid_from
+
+		annotation SummarizationSetBy = User
+
+		annotation UnderlyingDateTimeDataType = Date
+
+	/// Validity end.
+	column valid_to
+		dataType: dateTime
+		formatString: yyyy-mm-dd
+		lineageTag: ad2b69c3-6cad-58b4-9c03-fc4753eceb12
+		summarizeBy: none
+		sourceColumn: valid_to
+
+		annotation SummarizationSetBy = User
+
+		annotation UnderlyingDateTimeDataType = Date
+
+	partition dim_tariff = m
+		mode: import
+		source =
+				let
+				    Source = fnVeloparcTable("GOLD", "DIM_TARIFF", {{"tariff_sk", type text}, {"tariff_id", type text}, {"band_index", Int64.Type}, {"customer_sk", type text}, {"product", type text}, {"zone_code", type text}, {"weight_from_kg", type number}, {"weight_to_kg", type number}, {"price", Currency.Type}, {"currency", type text}, {"fuel_surcharge_pct", type number}, {"valid_from", type date}, {"valid_to", type date}})
+				in
+				    Source
+
+	annotation PBI_ResultType = Table

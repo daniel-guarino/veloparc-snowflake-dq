@@ -1,0 +1,101 @@
+/// Partner settlement per partner x zone x month.
+table fct_partner_cost
+	lineageTag: fda0ad5f-f03f-5ae8-91be-3374ea624ece
+
+	/// Settlement id.
+	column settlement_id
+		dataType: string
+		lineageTag: 8f1f1db3-d96a-5a2b-832b-fee7031cdaa7
+		summarizeBy: none
+		sourceColumn: settlement_id
+
+		annotation SummarizationSetBy = User
+
+	/// Partner x zone.
+	column partner_zone_sk
+		dataType: string
+		isHidden
+		lineageTag: 1d151c09-ca93-5f27-8b1b-778006b14ed5
+		summarizeBy: none
+		sourceColumn: partner_zone_sk
+
+		annotation SummarizationSetBy = User
+
+	/// Month (YYYY-MM); joins dim_month.
+	column period
+		dataType: string
+		isHidden
+		lineageTag: 6d541d1c-f93d-567e-afe4-00021f229a3d
+		summarizeBy: none
+		sourceColumn: period
+
+		annotation SummarizationSetBy = User
+
+	/// Stops.
+	column stops
+		dataType: int64
+		formatString: #,0
+		lineageTag: 9216ed78-11ee-5956-a60b-56fdadbee7dc
+		summarizeBy: sum
+		sourceColumn: stops
+
+		annotation SummarizationSetBy = User
+
+	/// Declared delivered parcels (R11).
+	column delivered_parcels
+		dataType: int64
+		formatString: #,0
+		lineageTag: aafd3cc6-c13a-51a0-a073-58b46ac711f2
+		summarizeBy: sum
+		sourceColumn: delivered_parcels
+
+		annotation SummarizationSetBy = User
+
+	/// Failed attempts.
+	column failed_attempts
+		dataType: int64
+		formatString: #,0
+		lineageTag: 65b5e11b-180e-5321-b41b-82fbaffa0e92
+		summarizeBy: sum
+		sourceColumn: failed_attempts
+
+		annotation SummarizationSetBy = User
+
+	/// Settlement currency.
+	column currency
+		dataType: string
+		lineageTag: 39e9de2e-9e73-50c1-89ee-afcab6cf795c
+		summarizeBy: none
+		sourceColumn: currency
+
+		annotation SummarizationSetBy = User
+
+	/// Total cost, settlement currency.
+	column total_cost_local
+		dataType: decimal
+		formatString: #,0.00
+		lineageTag: 247e2239-a4ba-5114-a5a4-e3027a7a5c90
+		summarizeBy: sum
+		sourceColumn: total_cost_local
+
+		annotation SummarizationSetBy = User
+
+	/// Total cost in EUR at the month's average rate.
+	column total_cost_eur
+		dataType: decimal
+		formatString: €#,0.00;-€#,0.00;€#,0.00
+		lineageTag: 2761f7f5-5edc-5fd5-b8b2-a45e3f41f5b0
+		summarizeBy: sum
+		sourceColumn: total_cost_eur
+
+		annotation SummarizationSetBy = User
+
+	partition fct_partner_cost = m
+		mode: import
+		source =
+				let
+				    Source = fnVeloparcTable("GOLD", "FCT_PARTNER_COST", {{"settlement_id", type text}, {"partner_zone_sk", type text}, {"period", type text}, {"stops", Int64.Type}, {"delivered_parcels", Int64.Type}, {"failed_attempts", Int64.Type}, {"currency", type text}, {"total_cost_local", Currency.Type}, {"total_cost_eur", Currency.Type}})
+				in
+				    Source
+
+	annotation PBI_ResultType = Table

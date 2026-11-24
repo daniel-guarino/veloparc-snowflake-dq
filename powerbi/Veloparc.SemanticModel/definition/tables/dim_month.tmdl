@@ -1,0 +1,78 @@
+/// Month dimension derived from dim_date in Power Query: joins the monthly facts (fct_partner_cost, fct_gl_revenue) on period and filters dim_date. Use it for month slicers.
+table dim_month
+	lineageTag: aa264bca-1dd4-5a91-a97c-646771ae4211
+
+	/// Month, YYYY-MM.
+	column period
+		dataType: string
+		lineageTag: 67814bcd-5022-5310-9bd2-9d0b3e949697
+		summarizeBy: none
+		sourceColumn: period
+		sortByColumn: month_index
+
+		annotation SummarizationSetBy = User
+
+	/// Year.
+	column year
+		dataType: int64
+		lineageTag: 6db12057-01d8-5b41-ac7c-0ba85f8aea7c
+		summarizeBy: none
+		sourceColumn: year
+
+		annotation SummarizationSetBy = User
+
+	/// Month 1-12.
+	column month
+		dataType: int64
+		lineageTag: d6bb6b16-0203-5dd0-b55f-4c29473e6149
+		summarizeBy: none
+		sourceColumn: month
+
+		annotation SummarizationSetBy = User
+
+	/// year x 12 + month; used for previous-month measures and sorting.
+	column month_index
+		dataType: int64
+		isHidden
+		lineageTag: be3a7d45-4a2b-5008-900d-4e0d8aa033a0
+		summarizeBy: none
+		sourceColumn: month_index
+
+		annotation SummarizationSetBy = User
+
+	/// First day of the month.
+	column month_start
+		dataType: dateTime
+		formatString: yyyy-mm-dd
+		lineageTag: 2057f79b-400c-56fd-b0e9-83bf6f9f1b58
+		summarizeBy: none
+		sourceColumn: month_start
+
+		annotation SummarizationSetBy = User
+
+		annotation UnderlyingDateTimeDataType = Date
+
+	/// Month label, e.g. Oct 2026.
+	column month_label
+		dataType: string
+		lineageTag: f5943eb9-de1d-5db0-b86f-5ddcd0e0a29d
+		summarizeBy: none
+		sourceColumn: month_label
+		sortByColumn: month_index
+
+		annotation SummarizationSetBy = User
+
+	partition dim_month = m
+		mode: import
+		source =
+				let
+				    Days = fnVeloparcTable("GOLD", "DIM_DATE", {{"date_key", Int64.Type}, {"period", type text}, {"year", Int64.Type}, {"month", Int64.Type}}),
+				    Known = Table.SelectRows(Days, each [date_key] <> -1),
+				    Months = Table.Distinct(Table.SelectColumns(Known, {"period", "year", "month"})),
+				    WithIndex = Table.AddColumn(Months, "month_index", each [year] * 12 + [month], Int64.Type),
+				    WithStart = Table.AddColumn(WithIndex, "month_start", each #date([year], [month], 1), type date),
+				    WithLabel = Table.AddColumn(WithStart, "month_label", each Date.ToText([month_start], [Format = "MMM yyyy", Culture = "en-US"]), type text)
+				in
+				    WithLabel
+
+	annotation PBI_ResultType = Table

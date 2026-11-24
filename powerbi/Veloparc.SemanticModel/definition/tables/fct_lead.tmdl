@@ -1,0 +1,69 @@
+/// One row per lead (latest state).
+table fct_lead
+	lineageTag: 7827af8b-ec5a-5b70-a34f-cbda313ab422
+
+	/// Lead id.
+	column lead_id
+		dataType: string
+		lineageTag: 519055b5-9054-58a8-8bce-6d60e1c70ad5
+		summarizeBy: none
+		sourceColumn: lead_id
+
+		annotation SummarizationSetBy = User
+
+	/// Creation date key.
+	column created_date_key
+		dataType: int64
+		isHidden
+		lineageTag: b0b3e634-667e-5b89-9a5d-91bd5dfb656f
+		summarizeBy: none
+		sourceColumn: created_date_key
+
+		annotation SummarizationSetBy = User
+
+	/// Converted opportunity (inactive relationship to fct_opportunity).
+	column converted_opportunity_id
+		dataType: string
+		lineageTag: c93d31d5-acc0-5dd2-be9a-84a67a6faefe
+		summarizeBy: none
+		sourceColumn: converted_opportunity_id
+
+		annotation SummarizationSetBy = User
+
+	/// ISO country; joins dim_country.
+	column country_code
+		dataType: string
+		isHidden
+		lineageTag: 477f8bb8-f763-5779-b6f8-6618e0c7b3d1
+		summarizeBy: none
+		sourceColumn: country_code
+
+		annotation SummarizationSetBy = User
+
+	/// Lead source.
+	column lead_source
+		dataType: string
+		lineageTag: ce5aaefa-facb-5c45-b3ab-5f80c0df7f49
+		summarizeBy: none
+		sourceColumn: lead_source
+
+		annotation SummarizationSetBy = User
+
+	/// Status.
+	column status
+		dataType: string
+		lineageTag: b7f62ac3-e6f8-5efc-a0f6-05b137edbf56
+		summarizeBy: none
+		sourceColumn: status
+
+		annotation SummarizationSetBy = User
+
+	partition fct_lead = m
+		mode: import
+		source =
+				let
+				    Source = fnVeloparcTable("GOLD", "FCT_LEAD", {{"lead_id", type text}, {"created_date_key", Int64.Type}, {"converted_opportunity_id", type text}, {"country_code", type text}, {"lead_source", type text}, {"status", type text}})
+				in
+				    Source
+
+	annotation PBI_ResultType = Table

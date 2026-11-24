@@ -1,0 +1,98 @@
+/// One row per scan; is_duplicate marks repeated (track_id, status, GLN) scans (R4).
+table fct_parcel_event
+	lineageTag: 0ba96fb4-6e64-5967-bcaf-a1c3c4cd79b5
+
+	/// Scan event id.
+	column event_id
+		dataType: string
+		lineageTag: 8d0c19c4-34f0-51bc-b5d7-a9192954f5c2
+		summarizeBy: none
+		sourceColumn: event_id
+
+		annotation SummarizationSetBy = User
+
+	/// Parcel (inactive relationship to fct_parcel).
+	column track_id
+		dataType: string
+		lineageTag: 4556212e-42e6-5e8f-8ed1-92d3911122e6
+		summarizeBy: none
+		sourceColumn: track_id
+
+		annotation SummarizationSetBy = User
+
+	/// Scan location.
+	column depot_gln
+		dataType: string
+		isHidden
+		lineageTag: d0965c06-36d9-5427-9f82-d754997d6efd
+		summarizeBy: none
+		sourceColumn: depot_gln
+
+		annotation SummarizationSetBy = User
+
+	/// Local business date of the scan.
+	column event_date_key
+		dataType: int64
+		isHidden
+		lineageTag: 1e535c3e-0e07-5a47-a0f1-73af8152a0cd
+		summarizeBy: none
+		sourceColumn: event_date_key
+
+		annotation SummarizationSetBy = User
+
+	/// Scan status.
+	column status
+		dataType: string
+		lineageTag: f290ef34-10db-545a-b2c9-53e8bbc067f6
+		summarizeBy: none
+		sourceColumn: status
+
+		annotation SummarizationSetBy = User
+
+	/// Scan time, UTC.
+	column event_ts
+		dataType: dateTime
+		formatString: yyyy-mm-dd hh:nn
+		lineageTag: ca0d376c-8d95-5908-a3b1-807cd557552d
+		summarizeBy: none
+		sourceColumn: event_ts
+
+		annotation SummarizationSetBy = User
+
+	/// Reason for NOT_DELIVERED.
+	column reason_code
+		dataType: string
+		lineageTag: 19984753-5376-53a9-9add-5036ff951a95
+		summarizeBy: none
+		sourceColumn: reason_code
+
+		annotation SummarizationSetBy = User
+
+	/// Minutes from scan to record (R5).
+	column capture_delay_min
+		dataType: int64
+		formatString: #,0
+		lineageTag: 11391d30-f429-51a3-bf0a-3ff7c0a095ad
+		summarizeBy: none
+		sourceColumn: capture_delay_min
+
+		annotation SummarizationSetBy = User
+
+	/// Repeated scan after the first (R4).
+	column is_duplicate
+		dataType: boolean
+		lineageTag: ff902d29-04ab-5bc8-984e-2991de855b28
+		summarizeBy: none
+		sourceColumn: is_duplicate
+
+		annotation SummarizationSetBy = User
+
+	partition fct_parcel_event = m
+		mode: import
+		source =
+				let
+				    Source = fnVeloparcTable("GOLD", "FCT_PARCEL_EVENT", {{"event_id", type text}, {"track_id", type text}, {"depot_gln", type text}, {"event_date_key", Int64.Type}, {"status", type text}, {"event_ts", type datetime}, {"reason_code", type text}, {"capture_delay_min", Int64.Type}, {"is_duplicate", type logical}})
+				in
+				    Source
+
+	annotation PBI_ResultType = Table

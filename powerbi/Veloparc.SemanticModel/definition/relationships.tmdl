@@ -1,0 +1,131 @@
+relationship d48c9ee5-d72f-5e9b-bb11-e9af0ef293ee
+	fromColumn: dim_date.period
+	toColumn: dim_month.period
+
+relationship c967f222-d8b1-58d8-b0d7-ed054d2121f4
+	fromColumn: fct_invoice_line.customer_sk
+	toColumn: dim_customer.customer_sk
+
+relationship a9192fd3-3b26-5433-9d4b-e4f83d134a33
+	fromColumn: fct_invoice_line.tariff_sk
+	toColumn: dim_tariff.tariff_sk
+
+relationship 2a8d4bef-b608-5217-bf0e-61a9f4c651ff
+	fromColumn: fct_invoice_line.invoice_date_key
+	toColumn: dim_date.date_key
+
+relationship e5e91f47-c3ab-5604-939b-d7d35ab4ac7f
+	fromColumn: fct_invoice_line.billing_country
+	toColumn: dim_country.country_code
+
+relationship b9bf2c22-7415-5ee3-883c-0fc8b11d1ee5
+	isActive: false
+	fromColumn: fct_invoice_line.track_id
+	toColumn: fct_parcel.track_id
+
+relationship a84f36a3-040b-59ed-aec7-dc3fb5de6bbc
+	fromColumn: fct_gl_revenue.period
+	toColumn: dim_month.period
+
+relationship 65da61a1-c71f-5a9d-96a3-a4edb3763c51
+	fromColumn: fct_gl_revenue.country_code
+	toColumn: dim_country.country_code
+
+relationship d50ca6dc-53d8-59fc-8a36-c593a1b91710
+	fromColumn: fct_parcel.customer_sk
+	toColumn: dim_customer.customer_sk
+
+relationship c1a16011-a36f-5866-82af-ca69d2749e2c
+	fromColumn: fct_parcel.partner_zone_sk
+	toColumn: dim_partner_zone.partner_zone_sk
+
+relationship 6e7cf473-e1b2-56c1-ac1f-eddd2335a2db
+	fromColumn: fct_parcel.shipping_date_key
+	toColumn: dim_date.date_key
+
+relationship fbcaee92-b64f-5353-80e1-7a072be3aa4e
+	fromColumn: fct_parcel.consignee_country
+	toColumn: dim_country.country_code
+
+relationship ae24dc37-6de3-59b5-93d2-5abaf2efb2f7
+	isActive: false
+	fromColumn: fct_parcel_event.track_id
+	toColumn: fct_parcel.track_id
+
+relationship 816aa8a6-755f-5472-afe3-5d3b82ec2382
+	fromColumn: fct_parcel_event.depot_gln
+	toColumn: dim_depot.depot_gln
+
+relationship b6b062d0-b405-52fc-b758-cbe2e8651007
+	fromColumn: fct_parcel_event.event_date_key
+	toColumn: dim_date.date_key
+
+relationship 6dc6b8a0-84f9-59d2-9a96-847b8ff6f11b
+	fromColumn: fct_partner_cost.partner_zone_sk
+	toColumn: dim_partner_zone.partner_zone_sk
+
+relationship 66de7cb1-2600-517c-8692-2816725e3607
+	fromColumn: fct_partner_cost.period
+	toColumn: dim_month.period
+
+relationship 275fd9d5-787e-5de6-9720-d6b6ff16b837
+	fromColumn: fct_opportunity.customer_sk
+	toColumn: dim_customer.customer_sk
+
+relationship 0a093c58-9010-556b-a81f-6591695621dc
+	fromColumn: fct_opportunity.close_date_key
+	toColumn: dim_date.date_key
+
+relationship 2235f3e7-b6db-575b-ae6d-5825acb5c5e5
+	fromColumn: fct_opportunity.country_code
+	toColumn: dim_country.country_code
+
+relationship 6724a90e-d657-541b-83bd-31377f580e5c
+	fromColumn: fct_lead.created_date_key
+	toColumn: dim_date.date_key
+
+relationship 0c4dfc8a-b1b0-517a-9cc9-e9c98b98e3e5
+	fromColumn: fct_lead.country_code
+	toColumn: dim_country.country_code
+
+relationship b5a2c993-2f45-53bc-bfac-246ed4e55d93
+	isActive: false
+	fromColumn: fct_lead.converted_opportunity_id
+	toColumn: fct_opportunity.opportunity_id
+
+relationship 424b9abb-fa5f-5041-99fb-0e6d1927a7c9
+	isActive: false
+	fromColumn: dim_tariff.customer_sk
+	toColumn: dim_customer.customer_sk
+
+relationship 9915e974-c923-597d-8138-dd083e92c036
+	isActive: false
+	fromColumn: dim_partner_zone.base_depot_gln
+	toColumn: dim_depot.depot_gln
+
+relationship 9d0287e6-12df-5f1a-9170-8ce5c1f3ac5d
+	isActive: false
+	fromColumn: dim_partner_zone.country_code
+	toColumn: dim_country.country_code
+
+relationship 90f6963a-ebea-521f-ba97-29501837982f
+	joinOnDateBehavior: datePartOnly
+	fromColumn: dq_scorecard_daily.day
+	toColumn: dim_date.full_date
+
+relationship 1090c587-f276-536e-ae63-33aa4f62d150
+	fromColumn: dq_scorecard_daily.country_code
+	toColumn: dim_country.country_code
+
+relationship 657cd068-f7ad-5a1b-abbc-b1884d9af7ab
+	joinOnDateBehavior: datePartOnly
+	fromColumn: dq_issue.event_date
+	toColumn: dim_date.full_date
+
+relationship 3413b7e6-dadb-5a43-965b-f7698c6fcee1
+	fromColumn: dq_issue.country_code
+	toColumn: dim_country.country_code
+
+relationship d4b012bb-af97-56f7-8c73-a484aa4899ef
+	fromColumn: dq_issue.rule_id
+	toColumn: dq_detection_eval.rule_id

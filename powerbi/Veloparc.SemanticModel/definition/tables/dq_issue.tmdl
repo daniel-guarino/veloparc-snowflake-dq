@@ -1,0 +1,149 @@
+/// One row per violation of any rule, with bronze lineage for root cause.
+table dq_issue
+	lineageTag: a3602b04-bcb6-593e-a036-24f65a464024
+
+	/// Hash of rule, business key and details.
+	column issue_id
+		dataType: string
+		isHidden
+		lineageTag: 7b80cf13-e9a7-5899-ad4c-4f3f5ca9b880
+		summarizeBy: none
+		sourceColumn: issue_id
+
+		annotation SummarizationSetBy = User
+
+	/// Rule (joins dq_detection_eval).
+	column rule_id
+		dataType: string
+		lineageTag: d24aa47b-0d34-5a5a-9f3e-a5e722f9bf1b
+		summarizeBy: none
+		sourceColumn: rule_id
+
+		annotation SummarizationSetBy = User
+
+	/// Key of the offending record, same format as the generator's anomaly manifest.
+	column business_key
+		dataType: string
+		lineageTag: 2b350281-ac56-55f6-9989-9879840fd5fa
+		summarizeBy: none
+		sourceColumn: business_key
+
+		annotation SummarizationSetBy = User
+
+	/// Source (topic).
+	column source
+		dataType: string
+		lineageTag: 54c52483-3752-5448-a45b-d2c8e1b58415
+		summarizeBy: none
+		sourceColumn: source
+
+		annotation SummarizationSetBy = User
+
+	/// Country; joins dim_country.
+	column country_code
+		dataType: string
+		isHidden
+		lineageTag: a61799ff-367c-5709-bcc7-3a56a4ce098f
+		summarizeBy: none
+		sourceColumn: country_code
+
+		annotation SummarizationSetBy = User
+
+	/// Business date of the record.
+	column event_date
+		dataType: dateTime
+		formatString: yyyy-mm-dd
+		lineageTag: 32ee49b1-169b-5e1b-ba96-1d8ef062cffc
+		summarizeBy: none
+		sourceColumn: event_date
+
+		annotation SummarizationSetBy = User
+
+		annotation UnderlyingDateTimeDataType = Date
+
+	/// What is wrong.
+	column details
+		dataType: string
+		lineageTag: fd80561f-79b6-53a5-a6d8-eaaa3304ef68
+		summarizeBy: none
+		sourceColumn: details
+
+		annotation SummarizationSetBy = User
+
+	/// Bronze lineage: CloudEvents id of the record.
+	column _event_id
+		dataType: string
+		isHidden
+		lineageTag: b63bd336-2c03-5a9b-a61b-bc6c7a090c55
+		summarizeBy: none
+		sourceColumn: _event_id
+
+		annotation SummarizationSetBy = User
+
+	/// Bronze lineage: source transaction id.
+	column _source_txn_id
+		dataType: string
+		isHidden
+		lineageTag: 41e9f963-219b-5ec9-ab7b-835556aa3c93
+		summarizeBy: none
+		sourceColumn: _source_txn_id
+
+		annotation SummarizationSetBy = User
+
+	/// Bronze lineage: landing file (file-based sources).
+	column _file_name
+		dataType: string
+		isHidden
+		lineageTag: b2957fa6-f277-5081-be4d-4adad2abc594
+		summarizeBy: none
+		sourceColumn: _file_name
+
+		annotation SummarizationSetBy = User
+
+	/// Bronze lineage: Kafka offset (Kafka sources).
+	column _kafka_offset
+		dataType: int64
+		formatString: 0
+		isHidden
+		lineageTag: e56c3f78-8e85-5e1c-8c67-f90c5fe0e1cd
+		summarizeBy: none
+		sourceColumn: _kafka_offset
+
+		annotation SummarizationSetBy = User
+
+	/// DQ dimension of the rule.
+	column dimension
+		dataType: string
+		lineageTag: 6942a674-e49d-583d-877e-c033159dca25
+		summarizeBy: none
+		sourceColumn: dimension
+
+		annotation SummarizationSetBy = User
+
+	/// Severity of the rule.
+	column severity
+		dataType: string
+		lineageTag: 43034c02-365f-5895-b3a0-d3770f871aeb
+		summarizeBy: none
+		sourceColumn: severity
+
+		annotation SummarizationSetBy = User
+
+	/// Owner of the rule.
+	column owner
+		dataType: string
+		lineageTag: da830591-fd11-5a70-93d8-84b7238bd533
+		summarizeBy: none
+		sourceColumn: owner
+
+		annotation SummarizationSetBy = User
+
+	partition dq_issue = m
+		mode: import
+		source =
+				let
+				    Source = fnVeloparcTable("DQ", "DQ_ISSUE", {{"issue_id", type text}, {"rule_id", type text}, {"business_key", type text}, {"source", type text}, {"country_code", type text}, {"event_date", type date}, {"details", type text}, {"_event_id", type text}, {"_source_txn_id", type text}, {"_file_name", type text}, {"_kafka_offset", Int64.Type}, {"dimension", type text}, {"severity", type text}, {"owner", type text}})
+				in
+				    Source
+
+	annotation PBI_ResultType = Table

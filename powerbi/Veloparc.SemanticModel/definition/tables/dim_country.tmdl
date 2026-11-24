@@ -1,0 +1,49 @@
+/// Conformed country derived in Power Query from the country codes of the facts and the DQ tables (gold has no country dimension).
+table dim_country
+	lineageTag: ef12e947-33c6-5e22-8bc9-39f4ae21de18
+
+	/// ISO 3166-1 alpha-2 code.
+	column country_code
+		dataType: string
+		lineageTag: a34589f6-a5b8-55f5-80b5-0eedccf59000
+		summarizeBy: none
+		sourceColumn: country_code
+
+		annotation SummarizationSetBy = User
+
+	/// Country name.
+	column country_name
+		dataType: string
+		lineageTag: 079b029a-f091-592c-80d3-746c3106f4fe
+		summarizeBy: none
+		sourceColumn: country_name
+
+		annotation SummarizationSetBy = User
+
+	partition dim_country = m
+		mode: import
+		source =
+				let
+				    // country columns of the facts and DQ tables (gold has no country dimension)
+				    Sources = {
+				        {"GOLD", "FCT_INVOICE_LINE", "billing_country"},
+				        {"GOLD", "FCT_PARCEL", "consignee_country"},
+				        {"GOLD", "FCT_GL_REVENUE", "country_code"},
+				        {"GOLD", "FCT_OPPORTUNITY", "country_code"},
+				        {"GOLD", "FCT_LEAD", "country_code"},
+				        {"GOLD", "DIM_PARTNER_ZONE", "country_code"},
+				        {"DQ", "DQ_SCORECARD_DAILY", "country_code"},
+				        {"DQ", "DQ_ISSUE", "country_code"}
+				    },
+				    Codes = List.Transform(
+				        Sources,
+				        each Table.Distinct(Table.RenameColumns(fnVeloparcTable(_{0}, _{1}, {{_{2}, type text}}), {{_{2}, "country_code"}}))
+				    ),
+				    All = Table.Distinct(Table.Combine(Codes)),
+				    NonBlank = Table.SelectRows(All, each [country_code] <> null and [country_code] <> ""),
+				    Names = [PT = "Portugal", ES = "Spain", DE = "Germany", PL = "Poland"],
+				    WithName = Table.AddColumn(NonBlank, "country_name", each Record.FieldOrDefault(Names, [country_code], [country_code]), type text)
+				in
+				    WithName
+
+	annotation PBI_ResultType = Table

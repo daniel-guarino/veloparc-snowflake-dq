@@ -1,0 +1,84 @@
+/// Calendar day (gold dim_date). The unknown member (date_key -1, 1900-01-01) is filtered out so the table can be marked as a date table; facts with date_key -1 fall under (Blank).
+table dim_date
+	lineageTag: 2f9fc4e8-a039-5c19-987e-a990bca3d30e
+	dataCategory: Time
+
+	/// YYYYMMDD smart key.
+	column date_key
+		dataType: int64
+		isHidden
+		lineageTag: 287dc410-88a3-58ad-9a46-2a1d6578febe
+		summarizeBy: none
+		sourceColumn: date_key
+
+		annotation SummarizationSetBy = User
+
+	/// Calendar day.
+	column full_date
+		dataType: dateTime
+		formatString: yyyy-mm-dd
+		isKey
+		lineageTag: 36cf116d-3542-535a-8f44-f6797bca143c
+		summarizeBy: none
+		sourceColumn: full_date
+
+		annotation SummarizationSetBy = User
+
+		annotation UnderlyingDateTimeDataType = Date
+
+	/// Year.
+	column year
+		dataType: int64
+		lineageTag: adea80f5-2569-5597-ac36-63bcec17366c
+		summarizeBy: none
+		sourceColumn: year
+
+		annotation SummarizationSetBy = User
+
+	/// Month 1-12.
+	column month
+		dataType: int64
+		lineageTag: 64e8dcb1-67bb-554e-b7a2-3b0dea6341c8
+		summarizeBy: none
+		sourceColumn: month
+
+		annotation SummarizationSetBy = User
+
+	/// YYYY-MM; joins dim_month.
+	column period
+		dataType: string
+		isHidden
+		lineageTag: d2c3d130-e1b6-5230-ab12-ea9d4f2fed53
+		summarizeBy: none
+		sourceColumn: period
+
+		annotation SummarizationSetBy = User
+
+	/// ISO-8601 week.
+	column iso_week
+		dataType: int64
+		lineageTag: b3b5786e-cd8f-58d4-81e6-e239dec35bb7
+		summarizeBy: none
+		sourceColumn: iso_week
+
+		annotation SummarizationSetBy = User
+
+	/// Saturday or Sunday.
+	column is_weekend
+		dataType: boolean
+		lineageTag: 870817b8-bc1d-5d1d-ad5f-e30b37ea8b15
+		summarizeBy: none
+		sourceColumn: is_weekend
+
+		annotation SummarizationSetBy = User
+
+	partition dim_date = m
+		mode: import
+		source =
+				let
+				    Source = fnVeloparcTable("GOLD", "DIM_DATE", {{"date_key", Int64.Type}, {"full_date", type date}, {"year", Int64.Type}, {"month", Int64.Type}, {"period", type text}, {"iso_week", Int64.Type}, {"is_weekend", type logical}})
+				    Known = Table.SelectRows(Source, each [date_key] <> -1)
+				in
+				    Known
+
+	annotation PBI_ResultType = Table

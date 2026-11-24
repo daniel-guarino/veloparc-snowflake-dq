@@ -1,0 +1,146 @@
+/// One row per parcel; is_inferred for track IDs seen only in events or invoices (R2).
+table fct_parcel
+	lineageTag: 3a5ce50d-604a-5aae-9a66-27fdef7ae6c3
+
+	/// Parcel TrackID.
+	column track_id
+		dataType: string
+		lineageTag: 8a153baf-4e49-5062-b4fc-404908003b81
+		summarizeBy: none
+		sourceColumn: track_id
+
+		annotation SummarizationSetBy = User
+
+	/// Customer version valid at the shipping date.
+	column customer_sk
+		dataType: string
+		isHidden
+		lineageTag: b501dab2-50e6-59b0-a175-14353e88caf3
+		summarizeBy: none
+		sourceColumn: customer_sk
+
+		annotation SummarizationSetBy = User
+
+	/// Delivery zone.
+	column partner_zone_sk
+		dataType: string
+		isHidden
+		lineageTag: 846f919c-5cf8-5478-a17c-0d6ee7e5d1b7
+		summarizeBy: none
+		sourceColumn: partner_zone_sk
+
+		annotation SummarizationSetBy = User
+
+	/// Shipping date key.
+	column shipping_date_key
+		dataType: int64
+		isHidden
+		lineageTag: 689cab42-9906-5464-ab48-fa0736226b80
+		summarizeBy: none
+		sourceColumn: shipping_date_key
+
+		annotation SummarizationSetBy = User
+
+	/// Parcel number.
+	column parcel_number
+		dataType: string
+		lineageTag: bc0a773f-1444-53cb-8d51-de2198afac2e
+		summarizeBy: none
+		sourceColumn: parcel_number
+
+		annotation SummarizationSetBy = User
+
+	/// SSCC.
+	column sscc
+		dataType: string
+		lineageTag: 658ee463-ecef-5055-9ad7-61b811221908
+		summarizeBy: none
+		sourceColumn: sscc
+
+		annotation SummarizationSetBy = User
+
+	/// Product.
+	column product
+		dataType: string
+		lineageTag: 6f2c9ac2-0c41-5394-97be-845d045e8676
+		summarizeBy: none
+		sourceColumn: product
+
+		annotation SummarizationSetBy = User
+
+	/// Incoterm.
+	column incoterm_code
+		dataType: string
+		lineageTag: 3980051b-d205-5162-8c0c-002d8dab55ac
+		summarizeBy: none
+		sourceColumn: incoterm_code
+
+		annotation SummarizationSetBy = User
+
+	/// Consignee country; joins dim_country.
+	column consignee_country
+		dataType: string
+		isHidden
+		lineageTag: 7084c666-e8b5-584a-8da7-4dc7060eb1f6
+		summarizeBy: none
+		sourceColumn: consignee_country
+
+		annotation SummarizationSetBy = User
+
+	/// Weight.
+	column weight_kg
+		dataType: double
+		formatString: #,0.00
+		lineageTag: d88d82e8-0c50-5784-899a-8d66aa919da1
+		summarizeBy: sum
+		sourceColumn: weight_kg
+
+		annotation SummarizationSetBy = User
+
+	/// First PICKUP scan, UTC.
+	column pickup_ts
+		dataType: dateTime
+		formatString: yyyy-mm-dd hh:nn
+		lineageTag: 7e51047e-552a-51d6-8505-b9a2f5fd3f40
+		summarizeBy: none
+		sourceColumn: pickup_ts
+
+		annotation SummarizationSetBy = User
+
+	/// First DELIVERED scan, UTC.
+	column delivered_ts
+		dataType: dateTime
+		formatString: yyyy-mm-dd hh:nn
+		lineageTag: b032a65a-07fe-5705-bc43-46ccff0c2f0b
+		summarizeBy: none
+		sourceColumn: delivered_ts
+
+		annotation SummarizationSetBy = User
+
+	/// A DELIVERED scan exists.
+	column is_delivered
+		dataType: boolean
+		lineageTag: e56c412c-63ff-5056-92a7-b8ec7b7b1a01
+		summarizeBy: none
+		sourceColumn: is_delivered
+
+		annotation SummarizationSetBy = User
+
+	/// Built from events or invoices only (R2).
+	column is_inferred
+		dataType: boolean
+		lineageTag: 3bbce32f-8c33-50c2-a2ba-40f499785b1d
+		summarizeBy: none
+		sourceColumn: is_inferred
+
+		annotation SummarizationSetBy = User
+
+	partition fct_parcel = m
+		mode: import
+		source =
+				let
+				    Source = fnVeloparcTable("GOLD", "FCT_PARCEL", {{"track_id", type text}, {"customer_sk", type text}, {"partner_zone_sk", type text}, {"shipping_date_key", Int64.Type}, {"parcel_number", type text}, {"sscc", type text}, {"product", type text}, {"incoterm_code", type text}, {"consignee_country", type text}, {"weight_kg", type number}, {"pickup_ts", type datetime}, {"delivered_ts", type datetime}, {"is_delivered", type logical}, {"is_inferred", type logical}})
+				in
+				    Source
+
+	annotation PBI_ResultType = Table

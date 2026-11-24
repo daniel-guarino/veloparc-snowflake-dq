@@ -1,0 +1,69 @@
+/// Delivery partner x zone; '-1' = unknown.
+table dim_partner_zone
+	lineageTag: 55b21b06-0f6e-5dfd-ae7a-b93e585e0563
+
+	/// Hash surrogate key of partner x zone.
+	column partner_zone_sk
+		dataType: string
+		isHidden
+		lineageTag: 55542740-02b2-5689-9200-cd4bddc6b704
+		summarizeBy: none
+		sourceColumn: partner_zone_sk
+
+		annotation SummarizationSetBy = User
+
+	/// Partner id.
+	column partner_id
+		dataType: string
+		lineageTag: 02668da0-490c-5c2d-baa3-a6bab9bf0260
+		summarizeBy: none
+		sourceColumn: partner_id
+
+		annotation SummarizationSetBy = User
+
+	/// Zone (R16: one partner per zone).
+	column zone_code
+		dataType: string
+		lineageTag: f962999f-8a0c-546f-937c-27500df60a97
+		summarizeBy: none
+		sourceColumn: zone_code
+
+		annotation SummarizationSetBy = User
+
+	/// Partner name.
+	column partner_name
+		dataType: string
+		lineageTag: 845bfbaf-ee90-50cb-a2d3-777020bbf7c2
+		summarizeBy: none
+		sourceColumn: partner_name
+
+		annotation SummarizationSetBy = User
+
+	/// Partner country; filters partner costs by country through an inactive relationship.
+	column country_code
+		dataType: string
+		lineageTag: 8fd02b39-7e32-5cc8-804e-be4043bb8067
+		summarizeBy: none
+		sourceColumn: country_code
+
+		annotation SummarizationSetBy = User
+
+	/// Base depot GLN.
+	column base_depot_gln
+		dataType: string
+		isHidden
+		lineageTag: a3bee860-0568-51c2-b770-1f36e8e7500c
+		summarizeBy: none
+		sourceColumn: base_depot_gln
+
+		annotation SummarizationSetBy = User
+
+	partition dim_partner_zone = m
+		mode: import
+		source =
+				let
+				    Source = fnVeloparcTable("GOLD", "DIM_PARTNER_ZONE", {{"partner_zone_sk", type text}, {"partner_id", type text}, {"zone_code", type text}, {"partner_name", type text}, {"country_code", type text}, {"base_depot_gln", type text}})
+				in
+				    Source
+
+	annotation PBI_ResultType = Table

@@ -1,0 +1,100 @@
+/// One row per opportunity (latest state).
+table fct_opportunity
+	lineageTag: 3469e49d-8d2e-5524-94c4-01c7eb2407ea
+
+	/// Opportunity id.
+	column opportunity_id
+		dataType: string
+		lineageTag: c511f2b8-b5a7-5ca6-9935-321c7372b40c
+		summarizeBy: none
+		sourceColumn: opportunity_id
+
+		annotation SummarizationSetBy = User
+
+	/// Current customer version; blank while there is no customer.
+	column customer_sk
+		dataType: string
+		isHidden
+		lineageTag: fa1a8a8d-3061-53ff-9e37-f4aef42c18a9
+		summarizeBy: none
+		sourceColumn: customer_sk
+
+		annotation SummarizationSetBy = User
+
+	/// Close date key.
+	column close_date_key
+		dataType: int64
+		isHidden
+		lineageTag: 4a5a0391-d4c6-552a-90fe-5317d6154c83
+		summarizeBy: none
+		sourceColumn: close_date_key
+
+		annotation SummarizationSetBy = User
+
+	/// Stage.
+	column stage
+		dataType: string
+		lineageTag: 3a0783be-54f8-5bbf-b66f-d35f12f2390d
+		summarizeBy: none
+		sourceColumn: stage
+
+		annotation SummarizationSetBy = User
+
+	/// Currency.
+	column currency
+		dataType: string
+		lineageTag: 74e59310-77eb-579f-8633-f1f0ab3eb6f3
+		summarizeBy: none
+		sourceColumn: currency
+
+		annotation SummarizationSetBy = User
+
+	/// Amount, opportunity currency.
+	column amount_local
+		dataType: decimal
+		formatString: #,0.00
+		lineageTag: 65358282-a94e-54fb-b110-02c7d1855785
+		summarizeBy: sum
+		sourceColumn: amount_local
+
+		annotation SummarizationSetBy = User
+
+	/// Amount in EUR.
+	column amount_eur
+		dataType: decimal
+		formatString: €#,0.00;-€#,0.00;€#,0.00
+		lineageTag: 2965a8c5-a307-5779-8a84-2a33329fecc6
+		summarizeBy: sum
+		sourceColumn: amount_eur
+
+		annotation SummarizationSetBy = User
+
+	/// Country; joins dim_country.
+	column country_code
+		dataType: string
+		isHidden
+		lineageTag: c676a123-a042-5f03-b779-c8961c48f156
+		summarizeBy: none
+		sourceColumn: country_code
+
+		annotation SummarizationSetBy = User
+
+	/// Expected parcels per month.
+	column expected_parcels_month
+		dataType: int64
+		formatString: #,0
+		lineageTag: 78ed6fd6-be88-5595-badc-285a22bb3bde
+		summarizeBy: sum
+		sourceColumn: expected_parcels_month
+
+		annotation SummarizationSetBy = User
+
+	partition fct_opportunity = m
+		mode: import
+		source =
+				let
+				    Source = fnVeloparcTable("GOLD", "FCT_OPPORTUNITY", {{"opportunity_id", type text}, {"customer_sk", type text}, {"close_date_key", Int64.Type}, {"stage", type text}, {"currency", type text}, {"amount_local", Currency.Type}, {"amount_eur", Currency.Type}, {"country_code", type text}, {"expected_parcels_month", Int64.Type}})
+				in
+				    Source
+
+	annotation PBI_ResultType = Table

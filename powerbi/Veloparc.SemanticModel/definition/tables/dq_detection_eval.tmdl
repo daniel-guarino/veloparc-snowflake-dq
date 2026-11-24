@@ -1,0 +1,160 @@
+/// Per rule, detections of the latest backfill run vs the injected anomalies and the generator's checker. Also the rule list of the model (one row per rule).
+table dq_detection_eval
+	lineageTag: 5bdf6f0c-1165-57b3-b106-83ddcbb052cd
+
+	/// Rule.
+	column rule_id
+		dataType: string
+		lineageTag: b1264788-f074-5ec5-a457-ddc0d3d324b4
+		summarizeBy: none
+		sourceColumn: rule_id
+
+		annotation SummarizationSetBy = User
+
+	/// DQ dimension.
+	column dimension
+		dataType: string
+		lineageTag: f8282ca4-f81f-57e6-8ad5-bf8442b1e3e2
+		summarizeBy: none
+		sourceColumn: dimension
+
+		annotation SummarizationSetBy = User
+
+	/// Owner.
+	column owner
+		dataType: string
+		lineageTag: 088f5486-1361-59f2-a768-86a31c12a1cb
+		summarizeBy: none
+		sourceColumn: owner
+
+		annotation SummarizationSetBy = User
+
+	/// Distinct business keys flagged by the rule.
+	column detected
+		dataType: int64
+		formatString: #,0
+		lineageTag: dddfd31d-a6db-5db6-a9eb-b6da4e92acae
+		summarizeBy: sum
+		sourceColumn: detected
+
+		annotation SummarizationSetBy = User
+
+	/// Anomalies injected for the rule.
+	column injected
+		dataType: int64
+		formatString: #,0
+		lineageTag: c85bbe4e-6f07-5376-bd11-64bea46759cb
+		summarizeBy: sum
+		sourceColumn: injected
+
+		annotation SummarizationSetBy = User
+
+	/// Injected anomalies matched by a detection.
+	column injected_found
+		dataType: int64
+		formatString: #,0
+		lineageTag: def635c1-2e6a-5a19-aa74-f1089511256d
+		summarizeBy: sum
+		sourceColumn: injected_found
+
+		annotation SummarizationSetBy = User
+
+	/// Injected anomalies with no detection.
+	column injected_missed
+		dataType: int64
+		formatString: #,0
+		lineageTag: 31097183-adc7-5ebb-9a58-d5aa578e7f23
+		summarizeBy: sum
+		sourceColumn: injected_missed
+
+		annotation SummarizationSetBy = User
+
+	/// Detections with no injected anomaly.
+	column detected_not_injected
+		dataType: int64
+		formatString: #,0
+		lineageTag: 987bf5c9-aa0f-5baf-b163-1a06cf43879d
+		summarizeBy: sum
+		sourceColumn: detected_not_injected
+
+		annotation SummarizationSetBy = User
+
+	/// Share of detections that match an injected anomaly.
+	column precision_vs_injected
+		dataType: double
+		formatString: 0.0%
+		lineageTag: d63b688a-5624-5a39-9f4a-e898f99aee77
+		summarizeBy: none
+		sourceColumn: precision_vs_injected
+
+		annotation SummarizationSetBy = User
+
+	/// Share of injected anomalies detected.
+	column recall_vs_injected
+		dataType: double
+		formatString: 0.0%
+		lineageTag: a1d8f285-8980-55f3-bf46-1fa7091aaa51
+		summarizeBy: none
+		sourceColumn: recall_vs_injected
+
+		annotation SummarizationSetBy = User
+
+	/// Violations found by the generator's checker.
+	column checker_violations
+		dataType: int64
+		formatString: #,0
+		lineageTag: 64742dd6-2308-56b5-9e0e-657e15a6fa58
+		summarizeBy: sum
+		sourceColumn: checker_violations
+
+		annotation SummarizationSetBy = User
+
+	/// Checker violations matched by a detection.
+	column checker_found
+		dataType: int64
+		formatString: #,0
+		lineageTag: b4bff4dd-cc33-514d-957a-fee8642fba4c
+		summarizeBy: sum
+		sourceColumn: checker_found
+
+		annotation SummarizationSetBy = User
+
+	/// Detections the checker did not report.
+	column detected_not_in_checker
+		dataType: int64
+		formatString: #,0
+		lineageTag: d33619b1-8639-52ff-b316-394a868be0ad
+		summarizeBy: sum
+		sourceColumn: detected_not_in_checker
+
+		annotation SummarizationSetBy = User
+
+	/// Share of detections the checker also reports.
+	column precision_vs_checker
+		dataType: double
+		formatString: 0.0%
+		lineageTag: 168533cf-de9c-5d46-833e-c19e0b9697f1
+		summarizeBy: none
+		sourceColumn: precision_vs_checker
+
+		annotation SummarizationSetBy = User
+
+	/// Share of checker violations detected.
+	column recall_vs_checker
+		dataType: double
+		formatString: 0.0%
+		lineageTag: 70c5188f-04f5-5724-bf7a-507482765aa5
+		summarizeBy: none
+		sourceColumn: recall_vs_checker
+
+		annotation SummarizationSetBy = User
+
+	partition dq_detection_eval = m
+		mode: import
+		source =
+				let
+				    Source = fnVeloparcTable("DQ", "DQ_DETECTION_EVAL", {{"rule_id", type text}, {"dimension", type text}, {"owner", type text}, {"detected", Int64.Type}, {"injected", Int64.Type}, {"injected_found", Int64.Type}, {"injected_missed", Int64.Type}, {"detected_not_injected", Int64.Type}, {"precision_vs_injected", type number}, {"recall_vs_injected", type number}, {"checker_violations", Int64.Type}, {"checker_found", Int64.Type}, {"detected_not_in_checker", Int64.Type}, {"precision_vs_checker", type number}, {"recall_vs_checker", type number}})
+				in
+				    Source
+
+	annotation PBI_ResultType = Table

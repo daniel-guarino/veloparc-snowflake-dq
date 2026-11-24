@@ -1,0 +1,58 @@
+/// Depots, hubs, parcel shops and lockers; '0000000000000' = unknown depot (R6).
+table dim_depot
+	lineageTag: b30af988-ed2f-5969-beb2-a9f6e22b06cd
+
+	/// GLN of the location.
+	column depot_gln
+		dataType: string
+		lineageTag: fad45a8a-f0e6-5924-b99c-4d99a5641696
+		summarizeBy: none
+		sourceColumn: depot_gln
+
+		annotation SummarizationSetBy = User
+
+	/// Name.
+	column depot_name
+		dataType: string
+		lineageTag: fe5ea4e3-8c54-5a70-a292-344113dd8212
+		summarizeBy: none
+		sourceColumn: depot_name
+
+		annotation SummarizationSetBy = User
+
+	/// HUB, DEPOT, PARCELSHOP or LOCKER.
+	column depot_type
+		dataType: string
+		lineageTag: 67125db1-1e57-59b9-a0ca-fa6cbb9af3e0
+		summarizeBy: none
+		sourceColumn: depot_type
+
+		annotation SummarizationSetBy = User
+
+	/// Country.
+	column country_code
+		dataType: string
+		lineageTag: 5dabfa06-089e-5249-ac27-e60a65b21cd2
+		summarizeBy: none
+		sourceColumn: country_code
+
+		annotation SummarizationSetBy = User
+
+	/// City.
+	column city
+		dataType: string
+		lineageTag: cc800c95-c681-5c16-bf28-d111093debeb
+		summarizeBy: none
+		sourceColumn: city
+
+		annotation SummarizationSetBy = User
+
+	partition dim_depot = m
+		mode: import
+		source =
+				let
+				    Source = fnVeloparcTable("GOLD", "DIM_DEPOT", {{"depot_gln", type text}, {"depot_name", type text}, {"depot_type", type text}, {"country_code", type text}, {"city", type text}})
+				in
+				    Source
+
+	annotation PBI_ResultType = Table

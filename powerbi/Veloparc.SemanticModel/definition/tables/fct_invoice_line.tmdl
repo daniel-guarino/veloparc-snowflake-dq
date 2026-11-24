@@ -1,0 +1,156 @@
+/// One row per invoice line; amount_eur = net amount x fx rate of the issue date.
+table fct_invoice_line
+	lineageTag: 655bc3a1-b617-5add-a5b3-1a4d0d53ce5e
+
+	/// Invoice number (degenerate).
+	column invoice_number
+		dataType: string
+		lineageTag: db087352-8741-5177-9faa-389fc9bd9d36
+		summarizeBy: none
+		sourceColumn: invoice_number
+
+		annotation SummarizationSetBy = User
+
+	/// Line number.
+	column line_no
+		dataType: int64
+		lineageTag: 370a9442-9631-5abf-a187-cdbaec351d0f
+		summarizeBy: none
+		sourceColumn: line_no
+
+		annotation SummarizationSetBy = User
+
+	/// Customer version valid at the issue date.
+	column customer_sk
+		dataType: string
+		isHidden
+		lineageTag: c453acd9-b71d-58cf-ae4b-bbfc02630a9d
+		summarizeBy: none
+		sourceColumn: customer_sk
+
+		annotation SummarizationSetBy = User
+
+	/// Tariff band containing the line weight.
+	column tariff_sk
+		dataType: string
+		isHidden
+		lineageTag: cd4f0e79-a7b7-5e67-887f-a7ba675b37f5
+		summarizeBy: none
+		sourceColumn: tariff_sk
+
+		annotation SummarizationSetBy = User
+
+	/// Invoiced parcel (inactive relationship to fct_parcel).
+	column track_id
+		dataType: string
+		lineageTag: c855404a-24e3-5264-b451-6e26a68848f4
+		summarizeBy: none
+		sourceColumn: track_id
+
+		annotation SummarizationSetBy = User
+
+	/// Issue date key.
+	column invoice_date_key
+		dataType: int64
+		isHidden
+		lineageTag: 94e49b1e-358d-5fd5-a772-1048ebca9793
+		summarizeBy: none
+		sourceColumn: invoice_date_key
+
+		annotation SummarizationSetBy = User
+
+	/// INVOICE or CREDIT_NOTE.
+	column doc_type
+		dataType: string
+		lineageTag: e464e99b-725c-5f91-b443-7c9925273339
+		summarizeBy: none
+		sourceColumn: doc_type
+
+		annotation SummarizationSetBy = User
+
+	/// Invoice a credit note corrects.
+	column related_invoice_number
+		dataType: string
+		lineageTag: 5138a055-1770-51f8-b98a-e72149c6b7e4
+		summarizeBy: none
+		sourceColumn: related_invoice_number
+
+		annotation SummarizationSetBy = User
+
+	/// Billed month (YYYY-MM); the R13 month.
+	column billing_period
+		dataType: string
+		lineageTag: b94307f5-83f4-5ff9-aaf7-d8d88375975c
+		summarizeBy: none
+		sourceColumn: billing_period
+
+		annotation SummarizationSetBy = User
+
+	/// Issuing company country (invoice number prefix): the R13 key.
+	column billing_country
+		dataType: string
+		isHidden
+		lineageTag: 54ea5cfd-5d8e-52a5-b2a5-fb716aae67c7
+		summarizeBy: none
+		sourceColumn: billing_country
+
+		annotation SummarizationSetBy = User
+
+	/// Invoice currency.
+	column currency
+		dataType: string
+		lineageTag: d4153236-6581-51b2-8efe-670dc5f20247
+		summarizeBy: none
+		sourceColumn: currency
+
+		annotation SummarizationSetBy = User
+
+	/// Line net amount, invoice currency.
+	column amount_local
+		dataType: decimal
+		formatString: #,0.00
+		lineageTag: 81235c26-33d4-5905-99fc-a5c7a0b70283
+		summarizeBy: sum
+		sourceColumn: amount_local
+
+		annotation SummarizationSetBy = User
+
+	/// EUR per unit, rate of the issue date.
+	column fx_rate_eur
+		dataType: double
+		formatString: 0.000000
+		lineageTag: a1f69a9c-2997-5fdc-8269-b52c4a8262e3
+		summarizeBy: none
+		sourceColumn: fx_rate_eur
+
+		annotation SummarizationSetBy = User
+
+	/// Line net amount in EUR.
+	column amount_eur
+		dataType: decimal
+		formatString: €#,0.00;-€#,0.00;€#,0.00
+		lineageTag: f742f0af-f626-59b2-b314-a34a1316d288
+		summarizeBy: sum
+		sourceColumn: amount_eur
+
+		annotation SummarizationSetBy = User
+
+	/// FUEL surcharges of the line, EUR.
+	column fuel_surcharge_eur
+		dataType: decimal
+		formatString: €#,0.00;-€#,0.00;€#,0.00
+		lineageTag: 36748b34-4af2-50cd-b545-56931aff49a9
+		summarizeBy: sum
+		sourceColumn: fuel_surcharge_eur
+
+		annotation SummarizationSetBy = User
+
+	partition fct_invoice_line = m
+		mode: import
+		source =
+				let
+				    Source = fnVeloparcTable("GOLD", "FCT_INVOICE_LINE", {{"invoice_number", type text}, {"line_no", Int64.Type}, {"customer_sk", type text}, {"tariff_sk", type text}, {"track_id", type text}, {"invoice_date_key", Int64.Type}, {"doc_type", type text}, {"related_invoice_number", type text}, {"billing_period", type text}, {"billing_country", type text}, {"currency", type text}, {"amount_local", Currency.Type}, {"fx_rate_eur", type number}, {"amount_eur", Currency.Type}, {"fuel_surcharge_eur", Currency.Type}})
+				in
+				    Source
+
+	annotation PBI_ResultType = Table

@@ -1,0 +1,61 @@
+/// Ledger revenue per company x month x GL account (R13 target).
+table fct_gl_revenue
+	lineageTag: 07101413-f02b-5ebd-a4b4-21711daae04a
+
+	/// Company.
+	column company_code
+		dataType: string
+		lineageTag: 418c210d-6bea-5a92-8096-c6a84ad42207
+		summarizeBy: none
+		sourceColumn: company_code
+
+		annotation SummarizationSetBy = User
+
+	/// Month (YYYY-MM); joins dim_month.
+	column period
+		dataType: string
+		isHidden
+		lineageTag: 7d650170-87eb-57dc-be9b-82d52537b41b
+		summarizeBy: none
+		sourceColumn: period
+
+		annotation SummarizationSetBy = User
+
+	/// GL account.
+	column gl_account
+		dataType: string
+		lineageTag: 0e1f8979-a2d8-569f-a9e1-3de22e060e70
+		summarizeBy: none
+		sourceColumn: gl_account
+
+		annotation SummarizationSetBy = User
+
+	/// Country; joins dim_country.
+	column country_code
+		dataType: string
+		isHidden
+		lineageTag: 393330a5-7dd8-5d37-90b7-73a7f419e61b
+		summarizeBy: none
+		sourceColumn: country_code
+
+		annotation SummarizationSetBy = User
+
+	/// Ledger revenue, EUR.
+	column amount_eur
+		dataType: decimal
+		formatString: €#,0.00;-€#,0.00;€#,0.00
+		lineageTag: 4cc762d6-f0b1-509f-83f7-ad6d299e0711
+		summarizeBy: sum
+		sourceColumn: amount_eur
+
+		annotation SummarizationSetBy = User
+
+	partition fct_gl_revenue = m
+		mode: import
+		source =
+				let
+				    Source = fnVeloparcTable("GOLD", "FCT_GL_REVENUE", {{"company_code", type text}, {"period", type text}, {"gl_account", type text}, {"country_code", type text}, {"amount_eur", Currency.Type}})
+				in
+				    Source
+
+	annotation PBI_ResultType = Table

@@ -1,0 +1,115 @@
+/// SCD2 customer versions. Facts already point to the version valid at their business date.
+table dim_customer
+	lineageTag: f5c2cdf7-1eb8-586a-ac92-87e83e4b5094
+
+	/// Hash surrogate key of the version; '-1' = unknown customer.
+	column customer_sk
+		dataType: string
+		isHidden
+		lineageTag: 38665523-89ba-5f9e-966e-79986c47fc95
+		summarizeBy: none
+		sourceColumn: customer_sk
+
+		annotation SummarizationSetBy = User
+
+	/// Customer id.
+	column contact_id
+		dataType: string
+		lineageTag: 0a6f5654-cb19-5d3c-9fc1-5fe87ace14af
+		summarizeBy: none
+		sourceColumn: contact_id
+
+		annotation SummarizationSetBy = User
+
+	/// Corporate group.
+	column group_customer_id
+		dataType: string
+		lineageTag: 17d1a29a-fa27-5a6a-929a-1763da8b6445
+		summarizeBy: none
+		sourceColumn: group_customer_id
+
+		annotation SummarizationSetBy = User
+
+	/// Name.
+	column customer_name
+		dataType: string
+		lineageTag: de998604-2d34-5fce-be86-8807357aad1f
+		summarizeBy: none
+		sourceColumn: customer_name
+
+		annotation SummarizationSetBy = User
+
+	/// Country of the customer (attribute; reports use dim_country through the facts).
+	column country_code
+		dataType: string
+		lineageTag: 56bccf43-f932-584d-af30-eb5a2a829af4
+		summarizeBy: none
+		sourceColumn: country_code
+
+		annotation SummarizationSetBy = User
+
+	/// Segment.
+	column segment
+		dataType: string
+		lineageTag: 421382f8-8006-5f71-8211-44cb6a5b72d6
+		summarizeBy: none
+		sourceColumn: segment
+
+		annotation SummarizationSetBy = User
+
+	/// VAT number.
+	column vat_number
+		dataType: string
+		lineageTag: 8b745398-f381-5b45-8be0-29f5f2fb4870
+		summarizeBy: none
+		sourceColumn: vat_number
+
+		annotation SummarizationSetBy = User
+
+	/// Version start.
+	column valid_from
+		dataType: dateTime
+		formatString: yyyy-mm-dd hh:nn
+		lineageTag: d7662a8b-6d89-59cb-ac67-d0ef351c7d9e
+		summarizeBy: none
+		sourceColumn: valid_from
+
+		annotation SummarizationSetBy = User
+
+	/// Next version's start; blank for the current one.
+	column valid_to
+		dataType: dateTime
+		formatString: yyyy-mm-dd hh:nn
+		lineageTag: 7becfc36-282f-5ed3-ba9d-d2edf4b8f71d
+		summarizeBy: none
+		sourceColumn: valid_to
+
+		annotation SummarizationSetBy = User
+
+	/// Latest version of the contact.
+	column is_current
+		dataType: boolean
+		lineageTag: 1bc811cd-3be0-57e6-b05f-ecae9f8dfd53
+		summarizeBy: none
+		sourceColumn: is_current
+
+		annotation SummarizationSetBy = User
+
+	/// 1 = first version received.
+	column version_number
+		dataType: int64
+		lineageTag: 366fa8f2-899e-579f-b363-efb1a6eed225
+		summarizeBy: none
+		sourceColumn: version_number
+
+		annotation SummarizationSetBy = User
+
+	partition dim_customer = m
+		mode: import
+		source =
+				let
+				    Source = fnVeloparcTable("GOLD", "DIM_CUSTOMER", {{"customer_sk", type text}, {"contact_id", type text}, {"group_customer_id", type text}, {"customer_name", type text}, {"country_code", type text}, {"segment", type text}, {"vat_number", type text}, {"valid_from", type datetime}, {"valid_to", type datetime}, {"is_current", type logical}, {"version_number", Int64.Type}})
+				in
+				    Source
+
+	annotation PBI_ResultType = Table

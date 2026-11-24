@@ -1,0 +1,596 @@
+/// Report measures (no data). Folders group them by page.
+table _Measures
+	lineageTag: d541efd1-7d0a-535a-9409-2e4ed30b64e7
+
+	/// Net invoice revenue in EUR (invoices and credit notes), by issue date.
+	measure 'Revenue EUR' = SUM ( fct_invoice_line[amount_eur] )
+		formatString: €#,0;-€#,0;€#,0
+		displayFolder: Revenue
+		lineageTag: bdaab6ca-c807-5195-a01c-35625d7425cb
+
+	/// Revenue EUR of the month before the latest selected month.
+	measure 'Revenue EUR PM' =
+			VAR _idx = MAX ( dim_month[month_index] )
+			RETURN
+			    CALCULATE (
+			        [Revenue EUR],
+			        REMOVEFILTERS ( dim_month ),
+			        REMOVEFILTERS ( dim_date ),
+			        dim_month[month_index] = _idx - 1
+			    )
+		formatString: €#,0;-€#,0;€#,0
+		displayFolder: Revenue
+		lineageTag: 232f5413-935b-592e-a1fd-46e7c6308e51
+
+	/// Month-on-month change of Revenue EUR (meaningful when one month is selected).
+	measure 'Revenue MoM %' = DIVIDE ( [Revenue EUR] - [Revenue EUR PM], [Revenue EUR PM] )
+		formatString: +0.0%;-0.0%;0.0%
+		displayFolder: Revenue
+		lineageTag: c9f4d5c7-7171-5dec-a9b0-aee413ecce65
+
+	/// Credit note amount in EUR (negative when the source is correct; R9).
+	measure 'Credit notes EUR' = CALCULATE ( [Revenue EUR], fct_invoice_line[doc_type] = "CREDIT_NOTE" )
+		formatString: €#,0;-€#,0;€#,0
+		displayFolder: Revenue
+		lineageTag: d4a85da1-c45b-5cda-8914-f403e112681a
+
+	/// FUEL surcharges invoiced, EUR.
+	measure 'Fuel surcharge EUR' = SUM ( fct_invoice_line[fuel_surcharge_eur] )
+		formatString: €#,0;-€#,0;€#,0
+		displayFolder: Revenue
+		lineageTag: 66ab20e7-b0d7-5a3f-90af-9233530e0db7
+
+	/// Distinct invoices (credit notes excluded).
+	measure Invoices = CALCULATE ( DISTINCTCOUNT ( fct_invoice_line[invoice_number] ), fct_invoice_line[doc_type] = "INVOICE" )
+		formatString: #,0
+		displayFolder: Revenue
+		lineageTag: 7c90ff6b-b43e-55eb-8674-98b3abdf3980
+
+	/// Distinct parcels on invoices (credit notes excluded).
+	measure 'Invoiced parcels' = CALCULATE ( DISTINCTCOUNT ( fct_invoice_line[track_id] ), fct_invoice_line[doc_type] = "INVOICE" )
+		formatString: #,0
+		displayFolder: Revenue
+		lineageTag: c94119b6-0992-53d7-84fb-da18dd2a1413
+
+	/// Revenue EUR per invoiced parcel.
+	measure 'Revenue per parcel EUR' = DIVIDE ( [Revenue EUR], [Invoiced parcels] )
+		formatString: €#,0.00
+		displayFolder: Revenue
+		lineageTag: 7cc5bcac-9c5e-5116-9b4d-0b57e6f715f1
+
+	/// Revenue EUR by billed month instead of issue date: the invoice side of R13.
+	measure 'Revenue EUR (billing period)' =
+			CALCULATE (
+			    [Revenue EUR],
+			    REMOVEFILTERS ( dim_month ),
+			    REMOVEFILTERS ( dim_date ),
+			    TREATAS ( VALUES ( dim_month[period] ), fct_invoice_line[billing_period] )
+			)
+		formatString: €#,0;-€#,0;€#,0
+		displayFolder: Revenue
+		lineageTag: 4ffdb53a-1460-51c6-bb55-9f12db5819ef
+
+	/// Ledger revenue in EUR (R13 target).
+	measure 'GL revenue EUR' = SUM ( fct_gl_revenue[amount_eur] )
+		formatString: €#,0;-€#,0;€#,0
+		displayFolder: Revenue
+		lineageTag: f48bec7a-d62c-5b44-8083-73e1ad499a27
+
+	/// Ledger revenue minus invoice revenue of the billed month.
+	measure 'Ledger gap EUR' = [GL revenue EUR] - [Revenue EUR (billing period)]
+		formatString: €#,0;-€#,0;€#,0
+		displayFolder: Revenue
+		lineageTag: 949ad955-8874-5143-8d0d-cf78753e3057
+
+	/// Gap between ledger and invoices, as a share of the ledger (R13 tolerance 0.5%).
+	measure 'Ledger gap %' = DIVIDE ( [GL revenue EUR] - [Revenue EUR (billing period)], ABS ( [GL revenue EUR] ) )
+		formatString: +0.00%;-0.00%;0.00%
+		displayFolder: Revenue
+		lineageTag: ac99b966-f090-594f-b6e5-a663371a46be
+
+	/// R13 check at the current grain: 'within 0.5%' or 'breach'.
+	measure 'R13 status' =
+			VAR _gap = [Ledger gap %]
+			RETURN
+			    IF ( ISBLANK ( [GL revenue EUR] ), BLANK (), IF ( ABS ( _gap ) <= 0.005, "within 0.5%", "breach" ) )
+		displayFolder: Revenue
+		lineageTag: c123a45b-51ee-54dc-9df7-16ecdef07f10
+
+	/// Color for conditional formatting of the R13 gap.
+	measure 'R13 status color' = SWITCH ( [R13 status], "within 0.5%", "#2C7A4B", "breach", "#B3261E" )
+		displayFolder: Revenue
+		lineageTag: 82d8727f-fa22-59a9-9808-f487446c3187
+
+	/// Parcels announced by a shipment (inferred R2 parcels excluded), by shipping date.
+	measure 'Shipped parcels' = CALCULATE ( COUNTROWS ( fct_parcel ), fct_parcel[is_inferred] = FALSE () )
+		formatString: #,0
+		displayFolder: Parcels
+		lineageTag: 0f02eb3b-6d46-56ee-8869-3e69627747c6
+
+	/// Parcels with a DELIVERED scan.
+	measure 'Delivered parcels' = CALCULATE ( COUNTROWS ( fct_parcel ), fct_parcel[is_delivered] = TRUE () )
+		formatString: #,0
+		displayFolder: Parcels
+		lineageTag: b41f6a8d-0348-5087-983b-5888bde21696
+
+	/// Delivered parcels / shipped parcels.
+	measure 'Delivery rate %' = DIVIDE ( [Delivered parcels], [Shipped parcels] )
+		formatString: 0.0%;-0.0%;0.0%
+		displayFolder: Parcels
+		lineageTag: 0511b36f-cae5-5a15-a47c-3906a56f210f
+
+	/// Share of delivered parcels delivered within 24 h of the first PICKUP scan (target 92%).
+	measure 'On-time delivery %' =
+			VAR _measured =
+			    FILTER (
+			        fct_parcel,
+			        fct_parcel[is_delivered] && NOT ISBLANK ( fct_parcel[pickup_ts] )
+			    )
+			VAR _ontime =
+			    FILTER ( _measured, ( fct_parcel[delivered_ts] - fct_parcel[pickup_ts] ) * 24 <= 24 )
+			RETURN
+			    DIVIDE ( COUNTROWS ( _ontime ), COUNTROWS ( _measured ) )
+		formatString: 0.0%;-0.0%;0.0%
+		displayFolder: Parcels
+		lineageTag: 5bdc0fa5-f61c-588f-8d53-52430f2fe391
+
+	/// Average hours from first PICKUP to first DELIVERED scan.
+	measure 'Avg lead time h' =
+			AVERAGEX (
+			    FILTER ( fct_parcel, fct_parcel[is_delivered] && NOT ISBLANK ( fct_parcel[pickup_ts] ) ),
+			    ( fct_parcel[delivered_ts] - fct_parcel[pickup_ts] ) * 24
+			)
+		formatString: #,0.0
+		displayFolder: Parcels
+		lineageTag: 8febf649-f9f6-53bb-adef-241e2d60e9de
+
+	/// Tracking scans, by local scan date.
+	measure Scans = COUNTROWS ( fct_parcel_event )
+		formatString: #,0
+		displayFolder: Parcels
+		lineageTag: 9f67fdd1-7de5-59f1-a381-1858fe4cf38d
+
+	/// Repeated (TrackID, status, GLN) scans after the first (R4).
+	measure 'Duplicate scans' = CALCULATE ( COUNTROWS ( fct_parcel_event ), fct_parcel_event[is_duplicate] = TRUE () )
+		formatString: #,0
+		displayFolder: Parcels
+		lineageTag: aebaf91a-bde8-5871-b72f-e75cb6a9f58f
+
+	/// Scans recorded more than 15 minutes after the scan time (R5).
+	measure 'Late captures' = CALCULATE ( COUNTROWS ( fct_parcel_event ), fct_parcel_event[capture_delay_min] > 15 )
+		formatString: #,0
+		displayFolder: Parcels
+		lineageTag: 79db8e0a-b545-52bf-8620-dc4e8bce4caa
+
+	/// NOT_DELIVERED scans.
+	measure 'Failed delivery scans' = CALCULATE ( COUNTROWS ( fct_parcel_event ), fct_parcel_event[status] = "NOT_DELIVERED" )
+		formatString: #,0
+		displayFolder: Parcels
+		lineageTag: af71ba9e-7d27-5bd3-b2fb-6bd54a8104f6
+
+	/// Partner settlement cost in EUR; follows dim_country through the partner's country.
+	measure 'Partner cost EUR' =
+			CALCULATE (
+			    SUM ( fct_partner_cost[total_cost_eur] ),
+			    USERELATIONSHIP ( dim_partner_zone[country_code], dim_country[country_code] )
+			)
+		formatString: €#,0;-€#,0;€#,0
+		displayFolder: Partners
+		lineageTag: d000a098-b9b6-54cb-9244-cfc9b4e25f94
+
+	/// Delivery stops settled with partners.
+	measure Stops =
+			CALCULATE (
+			    SUM ( fct_partner_cost[stops] ),
+			    USERELATIONSHIP ( dim_partner_zone[country_code], dim_country[country_code] )
+			)
+		formatString: #,0
+		displayFolder: Partners
+		lineageTag: 8a39b136-664c-5eb2-b05a-3a04baff4a0d
+
+	/// Delivered parcels declared by partners (R11).
+	measure 'Partner delivered parcels' =
+			CALCULATE (
+			    SUM ( fct_partner_cost[delivered_parcels] ),
+			    USERELATIONSHIP ( dim_partner_zone[country_code], dim_country[country_code] )
+			)
+		formatString: #,0
+		displayFolder: Partners
+		lineageTag: 8b790caa-432a-545a-9cb7-9c73a3d22bce
+
+	/// Failed delivery attempts declared by partners.
+	measure 'Failed attempts' =
+			CALCULATE (
+			    SUM ( fct_partner_cost[failed_attempts] ),
+			    USERELATIONSHIP ( dim_partner_zone[country_code], dim_country[country_code] )
+			)
+		formatString: #,0
+		displayFolder: Partners
+		lineageTag: c4d2b85a-799e-5dd7-9b28-d759397b683e
+
+	/// Partner cost EUR per stop.
+	measure 'Partner cost per stop EUR' = DIVIDE ( [Partner cost EUR], [Stops] )
+		formatString: €#,0.00
+		displayFolder: Partners
+		lineageTag: d3ac10c4-0355-589b-9b99-12e03670ca45
+
+	/// Partner cost EUR per declared delivered parcel.
+	measure 'Partner cost per parcel EUR' = DIVIDE ( [Partner cost EUR], [Partner delivered parcels] )
+		formatString: €#,0.00
+		displayFolder: Partners
+		lineageTag: a3cb8179-59dd-54fa-b46f-ae7677477b43
+
+	/// Revenue EUR minus partner cost EUR.
+	measure 'Margin after partners EUR' = [Revenue EUR] - [Partner cost EUR]
+		formatString: €#,0;-€#,0;€#,0
+		displayFolder: Partners
+		lineageTag: 0ad80955-cb19-526d-92de-14e1a0e2088a
+
+	/// Margin after partner costs as a share of revenue.
+	measure 'Margin after partners %' = DIVIDE ( [Margin after partners EUR], [Revenue EUR] )
+		formatString: 0.0%;-0.0%;0.0%
+		displayFolder: Partners
+		lineageTag: 88bdd8ea-d5ac-5c4b-b1ca-4b83e7ad38fe
+
+	/// Opportunities, by close date.
+	measure Opportunities = COUNTROWS ( fct_opportunity )
+		formatString: #,0
+		displayFolder: Sales
+		lineageTag: 8ecbe01d-1243-5859-93ad-921256b6d44f
+
+	/// Opportunities not yet closed.
+	measure 'Open opportunities' = CALCULATE ( [Opportunities], NOT ( fct_opportunity[stage] IN { "Closed Won", "Closed Lost" } ) )
+		formatString: #,0
+		displayFolder: Sales
+		lineageTag: e3a25416-4481-5094-af81-1a413fd71380
+
+	/// Opportunity amount in EUR, any stage.
+	measure 'Opportunity amount EUR' = SUM ( fct_opportunity[amount_eur] )
+		formatString: €#,0;-€#,0;€#,0
+		displayFolder: Sales
+		lineageTag: a62e4654-5c92-5b12-ade4-2efeab9869cc
+
+	/// Amount in EUR of open opportunities.
+	measure 'Pipeline amount EUR' = CALCULATE ( [Opportunity amount EUR], NOT ( fct_opportunity[stage] IN { "Closed Won", "Closed Lost" } ) )
+		formatString: €#,0;-€#,0;€#,0
+		displayFolder: Sales
+		lineageTag: 0e21973f-9e82-5f9c-8a93-1978d8864f32
+
+	/// Amount in EUR of won opportunities.
+	measure 'Won amount EUR' = CALCULATE ( [Opportunity amount EUR], fct_opportunity[stage] = "Closed Won" )
+		formatString: €#,0;-€#,0;€#,0
+		displayFolder: Sales
+		lineageTag: 510c2276-c50a-5660-a590-78dff2a2bf37
+
+	/// Won / closed opportunities.
+	measure 'Win rate %' =
+			DIVIDE (
+			    CALCULATE ( [Opportunities], fct_opportunity[stage] = "Closed Won" ),
+			    CALCULATE ( [Opportunities], fct_opportunity[stage] IN { "Closed Won", "Closed Lost" } )
+			)
+		formatString: 0.0%;-0.0%;0.0%
+		displayFolder: Sales
+		lineageTag: 881af4e6-6674-57ce-94af-2767e39c5f82
+
+	/// Leads, by creation date.
+	measure Leads = COUNTROWS ( fct_lead )
+		formatString: #,0
+		displayFolder: Sales
+		lineageTag: a1eceee1-4e5b-5317-a3ca-0212c7df6cdc
+
+	/// Leads converted into an opportunity.
+	measure 'Converted leads' = CALCULATE ( [Leads], NOT ISBLANK ( fct_lead[converted_opportunity_id] ) )
+		formatString: #,0
+		displayFolder: Sales
+		lineageTag: ce973a10-4a1c-5432-a19e-6da919043d88
+
+	/// Converted leads / leads.
+	measure 'Lead conversion %' = DIVIDE ( [Converted leads], [Leads] )
+		formatString: 0.0%;-0.0%;0.0%
+		displayFolder: Sales
+		lineageTag: 686e3eda-27f5-5a73-8706-a500a303d850
+
+	/// Silver records evaluated by the scorecard.
+	measure 'Records evaluated' = SUM ( dq_scorecard_daily[records_evaluated] )
+		formatString: #,0
+		displayFolder: Data quality
+		lineageTag: 06204170-6b5d-52e3-9764-44f4dce4729c
+
+	/// Records with at least one issue (per dimension).
+	measure 'Records with issue' = SUM ( dq_scorecard_daily[records_with_issue] )
+		formatString: #,0
+		displayFolder: Data quality
+		lineageTag: d4320825-0c05-5c52-af7d-f034c589fa84
+
+	/// Share of records without an issue, weighted by records evaluated (scorecard definition).
+	measure pct_valid = DIVIDE ( [Records evaluated] - [Records with issue], [Records evaluated] )
+		formatString: 0.00%;-0.00%;0.00%
+		displayFolder: Data quality
+		lineageTag: 9e10c6a4-8247-5a53-afb6-289a3d337206
+
+	/// Lowest catalog threshold in the current context (dimension threshold at cell level).
+	measure 'Threshold %' = DIVIDE ( MIN ( dq_scorecard_daily[threshold_pct] ), 100 )
+		formatString: 0.0%;-0.0%;0.0%
+		displayFolder: Data quality
+		lineageTag: a4398897-d2a2-5ac2-b06f-8dc4fbd939cd
+
+	/// green at or above the threshold, amber within 1 point, red below (same rule as dq_scorecard_daily).
+	measure 'DQ status' =
+			VAR _p = [pct_valid]
+			VAR _t = [Threshold %]
+			RETURN
+			    SWITCH (
+			        TRUE (),
+			        ISBLANK ( _p ), BLANK (),
+			        _p >= _t, "green",
+			        _p >= _t - 0.01, "amber",
+			        "red"
+			    )
+		displayFolder: Data quality
+		lineageTag: db27e9d5-1996-5a9c-ab12-a10a953fb049
+
+	/// Status color for conditional formatting.
+	measure 'DQ status color' = SWITCH ( [DQ status], "green", "#2C7A4B", "amber", "#9A6400", "red", "#B3261E" )
+		displayFolder: Data quality
+		lineageTag: 0b18841f-e096-5025-b289-31abbe4623ee
+
+	/// Status with a glyph, so it never relies on color alone.
+	measure 'DQ status label' = SWITCH ( [DQ status], "green", "● green", "amber", "◆ amber", "red", "▲ red" )
+		displayFolder: Data quality
+		lineageTag: e6a6724d-ecc7-5d4b-b446-3416e1f40421
+
+	/// Data product x dimension cells in green over the selected days.
+	measure 'Green cells' = COUNTROWS ( FILTER ( SUMMARIZE ( dq_scorecard_daily, dq_scorecard_daily[data_product], dq_scorecard_daily[dimension] ), [DQ status] = "green" ) )
+		formatString: #,0
+		displayFolder: Data quality
+		lineageTag: 748e68b8-6a3b-5ca9-9d31-111c56588c9b
+
+	/// Data product x dimension cells in amber over the selected days.
+	measure 'Amber cells' = COUNTROWS ( FILTER ( SUMMARIZE ( dq_scorecard_daily, dq_scorecard_daily[data_product], dq_scorecard_daily[dimension] ), [DQ status] = "amber" ) )
+		formatString: #,0
+		displayFolder: Data quality
+		lineageTag: a2570440-5b69-59a1-9a9f-6b743e5a1425
+
+	/// Data product x dimension cells in red over the selected days.
+	measure 'Red cells' = COUNTROWS ( FILTER ( SUMMARIZE ( dq_scorecard_daily, dq_scorecard_daily[data_product], dq_scorecard_daily[dimension] ), [DQ status] = "red" ) )
+		formatString: #,0
+		displayFolder: Data quality
+		lineageTag: e8be8855-ba2d-51f2-8c4d-0d238c92c6c9
+
+	/// Current violations in dq_issue (every row is an open issue: dq_issue has no status).
+	measure 'Open issues' = COUNTROWS ( dq_issue )
+		formatString: #,0
+		displayFolder: Data quality
+		lineageTag: 76122264-43a1-50d0-85f6-e2b498516cce
+
+	/// Rules with at least one violation.
+	measure 'Rules with issues' = DISTINCTCOUNT ( dq_issue[rule_id] )
+		formatString: #,0
+		displayFolder: Data quality
+		lineageTag: 0a61c2b2-5d10-54c1-9307-27c90f70ff29
+
+	/// Business keys flagged by the rules (backfill window).
+	measure Detected = SUM ( dq_detection_eval[detected] )
+		formatString: #,0
+		displayFolder: Detection
+		lineageTag: 1ac44fcd-cd57-58d3-a6d1-556a9cf65a00
+
+	/// Anomalies injected by the generator.
+	measure Injected = SUM ( dq_detection_eval[injected] )
+		formatString: #,0
+		displayFolder: Detection
+		lineageTag: 348d833f-91bc-5061-9739-523914ce4304
+
+	/// Injected anomalies detected.
+	measure 'Injected found' = SUM ( dq_detection_eval[injected_found] )
+		formatString: #,0
+		displayFolder: Detection
+		lineageTag: 7ec36f92-47b4-5194-98c8-99acb5b3611a
+
+	/// Injected anomalies not detected (false negatives).
+	measure 'Injected missed' = SUM ( dq_detection_eval[injected_missed] )
+		formatString: #,0
+		displayFolder: Detection
+		lineageTag: 8dcd24db-2779-5822-afa3-42c01471e97a
+
+	/// Detections with no injected anomaly: natural violations or false positives.
+	measure 'Detected not injected' = SUM ( dq_detection_eval[detected_not_injected] )
+		formatString: #,0
+		displayFolder: Detection
+		lineageTag: ec8cc997-8d4e-5bff-8e24-327ecf1f3bab
+
+	/// Share of injected anomalies detected.
+	measure 'Recall vs injected' = DIVIDE ( [Injected found], [Injected] )
+		formatString: 0.0%;-0.0%;0.0%
+		displayFolder: Detection
+		lineageTag: 8a921a70-eccc-52e1-b0e1-5cc591a0ec6e
+
+	/// Share of detections that match an injected anomaly (natural violations count against it).
+	measure 'Precision vs injected' = DIVIDE ( [Detected] - [Detected not injected], [Detected] )
+		formatString: 0.0%;-0.0%;0.0%
+		displayFolder: Detection
+		lineageTag: aa1f6d9c-3362-5f47-be75-2380ec4541ce
+
+	/// Share of detections the generator's own checker also reports (natural violations included).
+	measure 'Precision vs checker' = DIVIDE ( [Detected] - SUM ( dq_detection_eval[detected_not_in_checker] ), [Detected] )
+		formatString: 0.0%;-0.0%;0.0%
+		displayFolder: Detection
+		lineageTag: 9f24c5bc-7900-538d-ab2a-5603f1187ef8
+
+	/// Share of checker violations detected.
+	measure 'Recall vs checker' = DIVIDE ( SUM ( dq_detection_eval[checker_found] ), SUM ( dq_detection_eval[checker_violations] ) )
+		formatString: 0.0%;-0.0%;0.0%
+		displayFolder: Detection
+		lineageTag: 975e6001-28f5-5164-bf90-052572cd5635
+
+	/// Green when every injected anomaly is found, amber from 95%, red below.
+	measure 'Recall color' =
+			VAR _r = [Recall vs injected]
+			RETURN
+			    SWITCH ( TRUE (), ISBLANK ( _r ), BLANK (), _r >= 1, "#2C7A4B", _r >= 0.95, "#9A6400", "#B3261E" )
+		displayFolder: Detection
+		lineageTag: 6034b406-c578-5eab-b0db-1291f5b0c67f
+
+	/// Rules with injected anomalies in the latest backfill.
+	measure 'Rules evaluated' = CALCULATE ( COUNTROWS ( dq_detection_eval ), dq_detection_eval[injected] > 0 )
+		formatString: #,0
+		displayFolder: Detection
+		lineageTag: 4b4938e0-843f-55fc-b705-81773985b242
+
+	/// Rules that found every injected anomaly.
+	measure 'Rules with full recall' = COUNTROWS ( FILTER ( dq_detection_eval, dq_detection_eval[injected] > 0 && dq_detection_eval[injected_found] = dq_detection_eval[injected] ) )
+		formatString: #,0
+		displayFolder: Detection
+		lineageTag: a7f662d8-96ea-58c9-8ac3-f021c54b1895
+
+	/// Executive overview headline.
+	measure 'Headline executive' =
+			VAR _rev = [Revenue EUR]
+			VAR _mom = [Revenue MoM %]
+			VAR _months = COUNTROWS ( VALUES ( dim_month[period] ) )
+			VAR _top =
+			    MAXX ( TOPN ( 1, VALUES ( dim_country[country_name] ), [Revenue EUR], DESC ), dim_country[country_name] )
+			VAR _revText = FORMAT ( _rev / 1000, "€#,0" ) & "k"
+			RETURN
+			    IF (
+			        ISBLANK ( _rev ),
+			        "No revenue in the selection.",
+			        IF (
+			            _months = 1 && NOT ISBLANK ( _mom ),
+			            "Revenue " & IF ( _mom >= 0, "grew ", "fell " ) & FORMAT ( ABS ( _mom ), "0.0%" ) & " to " & _revText
+			                & "; " & _top & " is the largest market.",
+			            "Revenue reached " & _revText & " over " & _months & " months; " & _top & " is the largest market."
+			        )
+			            & " Margin after partners: " & FORMAT ( [Margin after partners %], "0.0%" ) & "."
+			    )
+		displayFolder: Headlines
+		lineageTag: edbdca18-791a-5b94-bb51-d768a734d6e2
+
+	/// Revenue & billing headline (R13).
+	measure 'Headline revenue' =
+			VAR _cells =
+			    FILTER (
+			        CROSSJOIN ( VALUES ( dim_country[country_code] ), VALUES ( dim_month[period] ) ),
+			        NOT ISBLANK ( [GL revenue EUR] )
+			    )
+			VAR _n = COUNTROWS ( _cells )
+			VAR _ok = COUNTROWS ( FILTER ( _cells, [R13 status] = "within 0.5%" ) )
+			RETURN
+			    IF (
+			        _n = 0,
+			        "No ledger figures in the selection.",
+			        "Invoices and ledger agree within 0.5% in " & _ok & " of " & _n & " country-months"
+			            & IF ( _ok = _n, ".", "; " & ( _n - _ok ) & " breach R13." )
+			    )
+		displayFolder: Headlines
+		lineageTag: 211bb249-0d86-5fdb-922a-d9e9a0aa8a11
+
+	/// Parcel operations headline.
+	measure 'Headline parcels' =
+			VAR _ot = [On-time delivery %]
+			RETURN
+			    IF (
+			        ISBLANK ( _ot ),
+			        "No delivered parcels in the selection.",
+			        FORMAT ( _ot, "0.0%" ) & " of delivered parcels arrived within 24 h of pickup, "
+			            & IF ( _ot >= 0.92, "on target", FORMAT ( 0.92 - _ot, "0.0%" ) & " below the 92% target" )
+			            & "; " & FORMAT ( [Duplicate scans], "#,0" ) & " duplicate scans."
+			    )
+		displayFolder: Headlines
+		lineageTag: 35e60e4e-166e-58af-a798-fd9a9b048fa1
+
+	/// Partner costs headline.
+	measure 'Headline partners' =
+			VAR _top =
+			    MAXX ( TOPN ( 1, VALUES ( dim_partner_zone[partner_name] ), [Partner cost per stop EUR], DESC ), dim_partner_zone[partner_name] )
+			RETURN
+			    IF (
+			        ISBLANK ( [Partner cost EUR] ),
+			        "No partner settlements in the selection.",
+			        "Partners cost " & FORMAT ( [Partner cost per stop EUR], "€#,0.00" ) & " per stop; "
+			            & _top & " is the most expensive at "
+			            & FORMAT ( CALCULATE ( [Partner cost per stop EUR], dim_partner_zone[partner_name] = _top ), "€#,0.00" ) & "."
+			    )
+		displayFolder: Headlines
+		lineageTag: 64063d3c-8f34-5790-81fe-61caa0fa9af9
+
+	/// Sales pipeline headline.
+	measure 'Headline sales' =
+			IF (
+			    ISBLANK ( [Opportunities] ) && ISBLANK ( [Leads] ),
+			    "No opportunities or leads in the selection.",
+			    "Open pipeline is " & FORMAT ( [Pipeline amount EUR] / 1000, "€#,0" ) & "k across "
+			        & FORMAT ( [Open opportunities], "#,0" ) & " opportunities; "
+			        & FORMAT ( [Lead conversion %], "0%" ) & " of leads converted."
+			)
+		displayFolder: Headlines
+		lineageTag: c493dedd-07c0-583f-813c-d10813a51bb0
+
+	/// Data quality scorecard headline.
+	measure 'Headline data quality' =
+			IF (
+			    ISBLANK ( [pct_valid] ),
+			    "No records evaluated in the selection.",
+			    FORMAT ( [pct_valid], "0.00%" ) & " of records pass every rule; "
+			        & COALESCE ( [Red cells], 0 ) & " of "
+			        & ( COALESCE ( [Green cells], 0 ) + COALESCE ( [Amber cells], 0 ) + COALESCE ( [Red cells], 0 ) )
+			        & " data product x dimension cells are red."
+			)
+		displayFolder: Headlines
+		lineageTag: 3efe7776-1763-575d-8a79-6d9cbeba0b6e
+
+	/// Detection evaluation headline: the portfolio's central claim.
+	measure 'Headline detection' =
+			VAR _rules = [Rules evaluated]
+			VAR _full = [Rules with full recall]
+			RETURN
+			    IF (
+			        ISBLANK ( [Injected] ),
+			        "No backfill answer key loaded yet.",
+			        "The checks found " & FORMAT ( [Recall vs injected], "0.0%" ) & " of the "
+			            & FORMAT ( [Injected], "#,0" ) & " injected anomalies; "
+			            & _full & " of " & _rules & " rules found all of theirs. "
+			            & FORMAT ( [Precision vs checker], "0.0%" ) & " of detections are confirmed by the generator's own checker."
+			    )
+		displayFolder: Headlines
+		lineageTag: bac1e26f-3c89-5649-a071-4601d8ff0592
+
+	/// Issue detail headline.
+	measure 'Headline issue detail' =
+			VAR _rule = SELECTEDVALUE ( dq_issue[rule_id] )
+			RETURN
+			    IF (
+			        ISBLANK ( _rule ),
+			        FORMAT ( [Open issues], "#,0" ) & " issues. Drill through from a rule to see its records.",
+			        _rule & ": " & FORMAT ( [Open issues], "#,0" ) & " violations, owned by " & SELECTEDVALUE ( dq_issue[owner], "several owners" ) & "."
+			    )
+		displayFolder: Headlines
+		lineageTag: a9c0a327-9f2b-54e9-b196-00e6046031aa
+
+	/// pct_valid with a status glyph, for the scorecard matrix (color plus shape).
+	measure 'DQ cell' =
+			VAR _p = [pct_valid]
+			RETURN
+			    IF (
+			        ISBLANK ( _p ),
+			        BLANK (),
+			        FORMAT ( _p, "0.00%" ) & "  " & SWITCH ( [DQ status], "green", "●", "amber", "◆", "red", "▲" )
+			    )
+		displayFolder: Data quality
+		lineageTag: 541b1c2a-325f-5e7b-97af-dd4d1770bb66
+
+	column Value
+		dataType: string
+		isHidden
+		lineageTag: 50d9578e-9314-5658-93f2-657ecbbf66cb
+		summarizeBy: none
+		sourceColumn: Value
+
+		annotation SummarizationSetBy = Automatic
+
+	partition _Measures = m
+		mode: import
+		source =
+				#table(type table [Value = text], {})
+
+	annotation PBI_ResultType = Table
