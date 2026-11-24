@@ -150,7 +150,7 @@ models:
       - name: dimension
       - name: owner
       - name: detected
-        description: Distinct business keys flagged by the rule within the backfill window.
+        description: Distinct business keys flagged by the rule, excluding connector rows (not in the answer key).
       - name: injected
         description: Anomalies injected for the rule (ANOMALY_GROUND_TRUTH, latest backfill run).
       - name: injected_found

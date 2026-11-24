@@ -3,17 +3,18 @@
 --    precision and recall. Detections not injected include natural violations (e.g. R5 late scans).
 --  * against the generator's own rule checker (DQ.GENERATOR_RULE_VIOLATIONS), which also counts natural violations.
 -- A detection matches an expected key when the keys are equal or the detection is a line of it ('INV#3' for 'INV').
--- Detections dated after the backfill window are left out (no answer key for them).
+-- Detections of connector rows (no file name; the publish of 2026-11-01) are left out: the answer key covers the
+-- backfill files only. Detections without lineage (group rules such as R11, R13, R16) are kept.
 with run as (
-    select RUN_ID as run_id, MANIFEST:window:to::date as window_to
+    select RUN_ID as run_id
     from {{ source('generator', 'GENERATOR_RUNS') }}
     where MANIFEST:mode::varchar = 'backfill'
     qualify row_number() over (order by _LOADED_AT desc) = 1
 ),
 detected as (
     select distinct i.rule_id, i.business_key
-    from {{ ref('dq_issue') }} i cross join run
-    where i.event_date is null or i.event_date <= run.window_to
+    from {{ ref('dq_issue') }} i
+    where not (i._file_name is null and i._event_id is not null)
 ),
 injected as (
     select distinct g.RULE_ID as rule_id, g.BUSINESS_KEY as business_key
