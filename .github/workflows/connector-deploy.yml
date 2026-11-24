@@ -1,0 +1,42 @@
+# Manual: rotate the key pair of SVC_AIVEN_CONNECTOR and create/update the Aiven Snowflake sink connector
+# (connect/snowflake_sink.json). The private key exists only in this job's memory and in the connector config.
+name: connector-deploy
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: connector-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: snowflake sink connector
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: dev
+    env:
+      SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+      SNOWFLAKE_PAT: ${{ secrets.SNOWFLAKE_PAT }}
+      SNOWFLAKE_USER: ${{ vars.SNOWFLAKE_USER || 'SVC_VELOPARC_CI' }}
+      SNOWFLAKE_ROLE: VLP_DEPLOYER
+      SNOWFLAKE_WAREHOUSE: WH_DEPLOY
+      AIVEN_API_TOKEN: ${{ secrets.AIVEN_API_TOKEN }}
+      AIVEN_PROJECT: ${{ vars.AIVEN_PROJECT || secrets.AIVEN_PROJECT }}
+      AIVEN_SERVICE: ${{ vars.AIVEN_SERVICE || secrets.AIVEN_SERVICE }}
+      AIVEN_CONNECT_SERVICE: ${{ vars.AIVEN_CONNECT_SERVICE || secrets.AIVEN_CONNECT_SERVICE }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - uses: astral-sh/setup-uv@v10.4.0
+        with:
+          enable-cache: true
+
+      - name: Install pinned dependencies
+        run: uv sync --frozen --no-dev
+
+      - name: Deploy connector
+        run: uv run --no-dev veloparc-gen connector-deploy
