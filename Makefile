@@ -1,6 +1,6 @@
 # Veloparc · developer and CI entry points. Requires uv (https://docs.astral.sh/uv/).
 .DEFAULT_GOAL := help
-.PHONY: help setup lint format test validate-contracts generate clean
+.PHONY: help setup lint format test validate-contracts generate clean dbt-parse
 
 UV ?= uv
 FROM ?= 2026-09-01
@@ -19,6 +19,11 @@ lint: ## ruff (lint + format check) and all pre-commit hooks
 	$(UV) run ruff check .
 	$(UV) run ruff format --check .
 	$(UV) run pre-commit run --all-files --show-diff-on-failure
+	$(MAKE) dbt-parse
+
+dbt-parse: ## Parse the dbt project offline (no Snowflake connection; placeholder profile)
+	mkdir -p dbt/veloparc/.ci && cp dbt/veloparc/profiles.example.yml dbt/veloparc/.ci/profiles.yml
+	$(UV) run dbt parse --project-dir dbt/veloparc --profiles-dir dbt/veloparc/.ci --no-version-check
 
 format: ## Auto-fix lint and formatting
 	$(UV) run ruff check --fix .

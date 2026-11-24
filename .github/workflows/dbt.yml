@@ -1,0 +1,86 @@
+# Manual: deploy dbt/veloparc to Snowflake as the dbt project object VLP_DP.DBT.VELOPARC and execute a dbt command
+# there (dbt Projects on Snowflake, dbt Core 1.12.3). Snowflake CLI connects as SVC_VELOPARC_CI with its PAT and role
+# VLP_DEPLOYER (owner of the object); the models run with the role in dbt_projects_profiles.yml (VLP_TRANSFORMER).
+# The project uses no Hub packages, so no external access integration is needed.
+name: dbt
+
+on:
+  workflow_dispatch:
+    inputs:
+      command:
+        description: dbt command and arguments, run in Snowflake (e.g. build, test --select source:bronze, run --select stg_*)
+        type: string
+        default: build
+      deploy:
+        description: Deploy the current code before executing
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dbt
+  cancel-in-progress: false
+
+env:
+  SNOWFLAKE_CLI_VERSION: "3.34.0"
+  DBT_VERSION: "1.12.3"
+  DBT_PROJECT: VELOPARC
+
+jobs:
+  dbt:
+    name: deploy and execute in Snowflake
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: dev
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - uses: astral-sh/setup-uv@v10.4.0
+
+      - name: Install Snowflake CLI
+        run: uv tool install "snowflake-cli==${SNOWFLAKE_CLI_VERSION}"
+
+      - name: Connection settings
+        env:
+          SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+        run: |
+          # Same account formats as veloparc_gen.snowflake_conn: org.account, org-account or the account URL.
+          account="${SNOWFLAKE_ACCOUNT#https://}"
+          account="${account%/}"
+          account="${account%.snowflakecomputing.com}"
+          account="${account//./-}"
+          echo "::add-mask::${account}"
+          echo "SNOW_ACCOUNT=${account}" >> "$GITHUB_ENV"
+
+      - name: Supported dbt versions
+        env:
+          SNOW_PASSWORD: ${{ secrets.SNOWFLAKE_PAT }}
+          SNOW_USER: ${{ vars.SNOWFLAKE_USER || 'SVC_VELOPARC_CI' }}
+        run: |
+          snow sql -x --account "$SNOW_ACCOUNT" --user "$SNOW_USER" --password "$SNOW_PASSWORD" \
+            --role VLP_DEPLOYER --warehouse WH_TRANSFORM \
+            -q "SELECT SYSTEM\$SUPPORTED_DBT_VERSIONS() AS SUPPORTED_DBT_VERSIONS"
+
+      - name: Deploy dbt project
+        if: inputs.deploy
+        env:
+          SNOW_PASSWORD: ${{ secrets.SNOWFLAKE_PAT }}
+          SNOW_USER: ${{ vars.SNOWFLAKE_USER || 'SVC_VELOPARC_CI' }}
+        run: |
+          rm -rf dbt/veloparc/target dbt/veloparc/logs dbt/veloparc/.ci
+          snow dbt deploy "$DBT_PROJECT" --source dbt/veloparc --dbt-version "$DBT_VERSION" --install-local-deps \
+            -x --account "$SNOW_ACCOUNT" --user "$SNOW_USER" --password "$SNOW_PASSWORD" \
+            --role VLP_DEPLOYER --warehouse WH_TRANSFORM --database VLP_DP --schema DBT
+
+      - name: Execute dbt command
+        env:
+          SNOW_PASSWORD: ${{ secrets.SNOWFLAKE_PAT }}
+          SNOW_USER: ${{ vars.SNOWFLAKE_USER || 'SVC_VELOPARC_CI' }}
+          DBT_COMMAND: ${{ inputs.command }}
+        run: |
+          read -r -a dbt_args <<< "$DBT_COMMAND"
+          snow dbt execute -x --account "$SNOW_ACCOUNT" --user "$SNOW_USER" --password "$SNOW_PASSWORD" \
+            --role VLP_DEPLOYER --warehouse WH_TRANSFORM --database VLP_DP --schema DBT \
+            "$DBT_PROJECT" "${dbt_args[@]}"

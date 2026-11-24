@@ -22,6 +22,8 @@ veloparc-gen = "veloparc_gen.cli:app"
 [dependency-groups]
 dev = [
     "check-jsonschema==0.39.0",
+    "dbt-core==1.12.3",
+    "dbt-snowflake==1.12.5",
     "detect-secrets==1.5.0",
     "pre-commit==4.7.0",
     "pytest==9.2.0",

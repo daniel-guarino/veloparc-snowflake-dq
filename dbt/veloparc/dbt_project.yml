@@ -1,0 +1,27 @@
+# Veloparc dbt project (fictitious company). Deployed to Snowflake as the dbt project object VLP_DP.DBT.VELOPARC
+# by the `dbt` workflow and executed there (dbt Projects on Snowflake, dbt Core 1.12.3). The repository is the
+# source of truth: edits made in Snowsight are replaced by the next deploy.
+name: veloparc
+version: "0.1.0"
+config-version: 2
+profile: veloparc
+
+model-paths: ["models"]
+macro-paths: ["macros"]
+test-paths: ["tests"]
+clean-targets: ["target", "dbt_packages", "logs"]
+
+flags:
+  send_anonymous_usage_stats: false
+  use_colors: false
+
+# Schemas are used as named (macros/generate_schema_name.sql): +schema: GOLD writes to VLP_DP.GOLD.
+models:
+  veloparc:
+    +persist_docs:
+      relation: true
+      columns: true
+
+data_tests:
+  veloparc:
+    +severity: error

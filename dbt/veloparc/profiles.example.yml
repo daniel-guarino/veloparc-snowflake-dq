@@ -1,0 +1,15 @@
+# Only for `dbt parse` in CI (`make dbt-parse` copies it to .ci/profiles.yml). dbt parse never connects, so the
+# defaults are placeholders. Real runs happen in Snowflake with dbt_projects_profiles.yml.
+veloparc:
+  target: prod
+  outputs:
+    prod:
+      type: snowflake
+      account: "{{ env_var('SNOWFLAKE_ACCOUNT', 'parse-only') }}"
+      user: "{{ env_var('SNOWFLAKE_USER', 'parse-only') }}"
+      password: "{{ env_var('SNOWFLAKE_PAT', 'parse-only') }}"  # pragma: allowlist secret
+      database: VLP_DP
+      schema: SILVER
+      role: VLP_TRANSFORMER
+      warehouse: WH_TRANSFORM
+      threads: 4
