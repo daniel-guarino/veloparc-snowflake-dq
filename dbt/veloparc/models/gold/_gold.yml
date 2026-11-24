@@ -1,0 +1,73 @@
+version: 2
+
+# Star schema (docs/data-model/gold_star_schema.dbml). Rebuilt as tables on every run; SELECT for VLP_READER.
+# Every dimension has an unknown member ('-1', depot '0000000000000', date -1), so fact keys are never NULL.
+
+models:
+  - name: dim_date
+    columns:
+      - name: date_key
+        data_tests: [unique, not_null]
+      - name: full_date
+        data_tests: [unique, not_null]
+
+  - name: dim_customer
+    description: SCD2 customer versions; point-in-time lookups use valid_from <= ts < coalesce(valid_to, 9999-12-31).
+    data_tests:
+      - unique_combination:
+          arguments: {columns: [contact_id, version_number]}
+    columns:
+      - name: customer_sk
+        data_tests: [unique, not_null]
+
+  - name: dim_depot
+    columns:
+      - name: depot_gln
+        data_tests: [unique, not_null]
+
+  - name: dim_partner_zone
+    columns:
+      - name: partner_zone_sk
+        data_tests: [unique, not_null]
+      - name: zone_code
+        description: R16 - each zone is served by exactly one partner.
+        data_tests:
+          - unique:
+              config: {severity: warn}
+
+  - name: dim_tariff
+    description: One row per tariff x weight band.
+    columns:
+      - name: tariff_sk
+        data_tests: [unique, not_null]
+      - name: customer_sk
+        data_tests:
+          - not_null
+          - relationships:
+              arguments: {to: ref('dim_customer'), field: customer_sk}
+
+  - name: fct_invoice_line
+    description: One row per invoice line; amount_eur = net amount x fx rate of the issue date.
+    data_tests:
+      - unique_combination:
+          arguments: {columns: [invoice_number, line_no]}
+    columns:
+      - name: customer_sk
+        data_tests:
+          - not_null
+          - relationships:
+              arguments: {to: ref('dim_customer'), field: customer_sk}
+      - name: tariff_sk
+        data_tests:
+          - not_null
+          - relationships:
+              arguments: {to: ref('dim_tariff'), field: tariff_sk}
+      - name: invoice_date_key
+        data_tests:
+          - relationships:
+              arguments: {to: ref('dim_date'), field: date_key}
+
+  - name: fct_gl_revenue
+    data_tests:
+      - unique_combination:
+          arguments: {columns: [company_code, period, gl_account]}
