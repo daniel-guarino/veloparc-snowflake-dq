@@ -67,5 +67,15 @@ repos:
     rev: v1.5.0
     hooks:
       - id: detect-secrets
-        args: ["--baseline", ".secrets.baseline"]
+        # PBIR names pages and visuals with 20-hex ids; only those exact lines are excluded.
+        args: ["--baseline", ".secrets.baseline", "--exclude-lines", '^\s*("name": |"activePageName": )?"[0-9a-f]{20}",?$']
         exclude: ^uv\.lock$
+
+  - repo: local
+    hooks:
+      - id: powerbi-validate
+        name: Power BI project (no Snowflake account id, columns vs dbt, DAX and report fields)
+        entry: python powerbi/tools/validate_pbip.py
+        language: python
+        files: ^(powerbi|dbt/veloparc/models)/
+        pass_filenames: false
