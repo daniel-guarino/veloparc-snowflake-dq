@@ -187,6 +187,9 @@ def snowflake_inspect() -> None:
         typer.secho(str(exc), fg=typer.colors.RED, err=True)
         raise typer.Exit(code=1) from exc
     typer.echo(json.dumps(result, indent=2, default=str))
+    if result["errors"]:
+        typer.secho(f'{len(result["errors"])} statement(s) failed, see "errors"', fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1)
     typer.echo("OK")
 
 

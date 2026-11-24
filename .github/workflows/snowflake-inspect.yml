@@ -36,9 +36,11 @@ jobs:
         run: uv sync --frozen --no-dev
 
       - name: Inspect
+        shell: bash  # bash -eo pipefail: a failure of the command is not hidden by tee
         run: uv run --no-dev veloparc-gen snowflake-inspect | tee inspect.txt
 
       - name: Keep the result
+        if: always()
         uses: actions/upload-artifact@v7.0.2
         with:
           name: snowflake-inspect
