@@ -50,9 +50,13 @@ def run_id_for(config: Config) -> str:
     return f"backfill-{w.start:%Y%m%d}-{w.end:%Y%m%d}-{config.fingerprint()[:10]}"
 
 
-def prepare(out_dir: Path, state_dir: Path, reset: bool) -> None:
+def prepare(out_dir: Path, state_dir: Path, reset: bool, keep_state: bool = False) -> None:
+    """Refuses to mix runs in one output folder. A backfill also starts from empty offsets; `publish` keeps the
+    offsets (keep_state) so the file-based topics continue where the previous run stopped."""
     offsets = state_dir / "offsets.json"
-    existing = [out_dir / d for d in OUTPUT_DIRS if (out_dir / d).exists()] + ([offsets] if offsets.exists() else [])
+    existing = [out_dir / d for d in OUTPUT_DIRS if (out_dir / d).exists()]
+    if offsets.exists() and not keep_state:
+        existing.append(offsets)
     if existing and not reset:
         listed = ", ".join(str(p) for p in existing)
         raise OutputExists(f"backfill output or state already exists ({listed}); use --reset to replace it")
@@ -171,7 +175,7 @@ def publish(config: Config, out_dir: Path, state_dir: Path, producer=None, reset
     from veloparc_gen.kafka_conn import kafka_config
     from veloparc_gen.sink.kafka import KafkaPublisher, kafka_producer
 
-    prepare(out_dir, state_dir, reset)
+    prepare(out_dir, state_dir, reset, keep_state=True)
     window = config.simulation.window
     run_id = f"publish-{window.start:%Y%m%d}-{window.end:%Y%m%d}-{config.fingerprint()[:10]}"
     run_dir = out_dir / "_generator" / "runs" / run_id
