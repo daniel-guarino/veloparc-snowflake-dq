@@ -1,6 +1,7 @@
 # Manual: deploy dbt/veloparc to Snowflake as the dbt project object VLP_DP.DBT.VELOPARC and execute a dbt command
 # there (dbt Projects on Snowflake, dbt Core 1.12.3). Snowflake CLI connects as SVC_VELOPARC_CI with its PAT and role
-# VLP_DEPLOYER (owner of the object); the models run with the role in dbt_projects_profiles.yml (VLP_TRANSFORMER).
+# VLP_DEPLOYER (owner of the object); the models run with the role in dbt_projects_profiles.yml (also VLP_DEPLOYER:
+# the PAT is restricted to that role).
 # The project uses no Hub packages, so no external access integration is needed.
 name: dbt
 

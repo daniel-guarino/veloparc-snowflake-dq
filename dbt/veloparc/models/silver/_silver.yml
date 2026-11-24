@@ -1,0 +1,107 @@
+version: 2
+
+# Basic integrity tests (Phase 7). Business rules R1-R16 come in Phase 9 with meta: {rule_id, dimension, owner}.
+# Enum checks are warnings: an out-of-contract value is a data quality finding, not a broken pipeline.
+
+models:
+  - name: customer
+    description: Every customer version received; SCD2 in gold uses updated_at as valid_from.
+    data_tests:
+      - unique_combination:
+          arguments: {columns: [contact_id, updated_at]}
+    columns:
+      - name: contact_id
+        data_tests: [not_null]
+      - name: updated_at
+        data_tests: [not_null]
+      - name: segment
+        data_tests:
+          - accepted_values:
+              arguments: {values: [B2B_SHIPPER, B2C_SHIPPER, MARKETPLACE]}
+              config: {severity: warn}
+
+  - name: depot
+    description: Latest version per depot GLN.
+    columns:
+      - name: gln
+        data_tests: [unique, not_null]
+      - name: depot_type
+        data_tests:
+          - accepted_values:
+              arguments: {values: [HUB, DEPOT, PARCELSHOP, LOCKER]}
+              config: {severity: warn}
+
+  - name: partner
+    description: Latest version per delivery partner.
+    columns:
+      - name: partner_id
+        data_tests: [unique, not_null]
+      - name: base_depot_gln
+        data_tests:
+          - relationships:
+              arguments: {to: ref('depot'), field: gln}
+              config: {severity: warn}
+
+  - name: partner_zone
+    description: Zones served by each partner (latest version).
+    data_tests:
+      - unique_combination:
+          arguments: {columns: [partner_id, zone_code]}
+    columns:
+      - name: partner_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments: {to: ref('partner'), field: partner_id}
+
+  - name: tariff
+    description: Latest version per tariff.
+    columns:
+      - name: tariff_id
+        data_tests: [unique, not_null]
+      - name: contact_id
+        data_tests: [not_null]
+      - name: product
+        data_tests:
+          - accepted_values:
+              arguments: {values: [PARCEL, EXPRESS, FREIGHT]}
+              config: {severity: warn}
+
+  - name: tariff_weight_band
+    description: Weight bands of each tariff (latest version), 1-based band_index.
+    data_tests:
+      - unique_combination:
+          arguments: {columns: [tariff_id, band_index]}
+    columns:
+      - name: tariff_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments: {to: ref('tariff'), field: tariff_id}
+
+  - name: crm_opportunity
+    description: Latest version per CRM opportunity (by LastModifiedDate).
+    columns:
+      - name: opportunity_id
+        data_tests: [unique, not_null]
+      - name: stage
+        data_tests:
+          - accepted_values:
+              arguments: {values: [Prospecting, Qualification, Proposal, Negotiation, Closed Won, Closed Lost]}
+              config: {severity: warn}
+
+  - name: crm_lead
+    description: Latest version per CRM lead; country_code normalized to ISO alpha-2, country_raw as received.
+    columns:
+      - name: lead_id
+        data_tests: [unique, not_null]
+      - name: status
+        data_tests:
+          - accepted_values:
+              arguments: {values: [Open, Working, Qualified, Unqualified, Converted]}
+              config: {severity: warn}
+      - name: lead_source
+        data_tests:
+          - accepted_values:
+              arguments: {values: [Web, Referral, Event, Partner, Outbound]}
+              config: {severity: warn}

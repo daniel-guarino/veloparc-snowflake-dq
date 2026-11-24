@@ -248,7 +248,7 @@ dbt starts at the bronze views and implements the source → silver mapping colu
 
 1. **dbt Projects on Snowflake** (dbt Core 1.12.3): the `dbt` workflow deploys `dbt/veloparc/` as the object
    `VLP_DP.DBT.VELOPARC` with Snowflake CLI (`snow dbt deploy`, PAT of the CI user) and runs `snow dbt execute`.
-   `dbt_projects_profiles.yml` has no credentials: models run with `VLP_TRANSFORMER` on `WH_TRANSFORM`. The code is
+   `dbt_projects_profiles.yml` has no credentials: models run with `VLP_DEPLOYER` (the CI PAT is restricted to that role) on `WH_TRANSFORM`. The code is
    visible in Snowsight, but the repository is the source of truth. `dbt-core` 1.12.3 is also pinned in the dev
    dependencies so CI runs `dbt parse` offline (`make dbt-parse`, part of `make lint`).
 2. **No Hub packages** for now: `dbt deps` inside Snowflake would need an external access integration (an
