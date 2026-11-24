@@ -146,3 +146,40 @@ def test_retries_with_one_replica_when_the_plan_refuses_more():
     kafka_setup.ensure_topics(api, small_config(), log=lambda *_: None)
     created = [b for m, path, b in api.calls if m == "POST" and path == "/topic"]
     assert len(created) == 5 and all(b["replication"] == 1 for b in created)
+
+
+def test_plan_policy_values_are_applied_and_retried():
+    from veloparc_gen.aiven import AivenError
+
+    class PolicyApi(FakeApi):
+        def _transport(self, method, url, body):
+            if method in ("POST", "PUT") and "/topic" in url and body["config"].get("retention_ms") != 259200000:
+                raise AivenError(
+                    'HTTP 400: {"error_code":"kafka_policy_violation",'
+                    '"message":"retention.ms must be 259200000 ms (4320 minutes)."}'
+                )
+            return super()._transport(method, url, body)
+
+    api = PolicyApi(existing_topics=["vlp.ops.tracking-event.v1"], node_count=1)
+    kafka_setup.ensure_topics(api, small_config(), log=lambda *_: None)
+    accepted = [b for m, path, b in api.calls if m in ("POST", "PUT") and "/topic" in path]
+    assert len(accepted) == 5
+    assert all(b["config"]["retention_ms"] == 259200000 for b in accepted)
+    assert all(b["config"]["message_timestamp_type"] == "LogAppendTime" for b in accepted)
+
+
+def test_plan_policy_accepts_text_values():
+    from veloparc_gen.aiven import AivenError
+
+    class TextPolicyApi(FakeApi):
+        def _transport(self, method, url, body):
+            if method == "POST" and url.endswith("/topic") and body["config"].get("cleanup_policy") != "delete":
+                raise AivenError(
+                    'HTTP 400: {"error_code":"kafka_policy_violation","message":"cleanup.policy must be delete."}'
+                )
+            return super()._transport(method, url, body)
+
+    api = TextPolicyApi(node_count=1)
+    kafka_setup.ensure_topics(api, small_config(), log=lambda *_: None)
+    created = [b for m, path, b in api.calls if m == "POST" and path == "/topic"]
+    assert len(created) == 5 and all(b["config"]["cleanup_policy"] == "delete" for b in created)

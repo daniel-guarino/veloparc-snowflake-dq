@@ -21,8 +21,8 @@ uv run veloparc-gen backfill --from 2026-09-01 --to 2026-10-31 --countries PT,ES
 ```
 
 Other options: `--seed`, `--scale 0.1` (a tenth of the volume), `--no-anomalies`, `--state-dir`, `--config-dir`.
-The reference run takes about 4 minutes on a 4-core laptop. It produces ~141k shipments, ~1.18M scans and ~5.5k
-files (210 MB). The same seed and configuration always produce byte-identical files.
+The reference run takes about 6 minutes (single process, schema gate included). It produces ~141k shipments,
+~1.18M scans and ~5.5k files (210 MB). The same seed and configuration always produce byte-identical files.
 
 ## Kafka (Aiven): setup and publish
 
