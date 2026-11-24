@@ -17,3 +17,13 @@ models:
         data_tests:
           - accepted_values:
               arguments: {values: [Lead, Opportunity]}
+  - name: stg_veloship_shipments
+    description: VeloShip shipment messages without technical duplicates or resends.
+  - name: stg_tracking_events
+    description: Scan events without technical duplicates or resends; SSCC rebuilt from the EPC URN.
+  - name: stg_invoices
+    description: Invoice and credit note messages without technical duplicates or resends.
+  - name: stg_partner_settlements
+    description: Partner settlement messages without technical duplicates or resends.
+  - name: stg_gl_extract
+    description: GL extract rows without technical duplicates or resends.

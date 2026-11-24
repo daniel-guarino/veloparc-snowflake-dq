@@ -105,3 +105,122 @@ models:
           - accepted_values:
               arguments: {values: [Web, Referral, Event, Partner, Outbound]}
               config: {severity: warn}
+
+  - name: veloship_shipment
+    description: One row per VeloShip shipment message.
+    columns:
+      - name: message_id
+        data_tests: [unique, not_null]
+      - name: contact_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments: {to: ref('customer'), field: contact_id}
+              config: {severity: warn}
+      - name: product
+        data_tests:
+          - accepted_values:
+              arguments: {values: [PARCEL, EXPRESS, FREIGHT]}
+              config: {severity: warn}
+
+  - name: veloship_parcel
+    description: Request units zipped with response parcels by position; unmatched units or parcels keep NULLs (R1).
+    data_tests:
+      - unique_combination:
+          arguments: {columns: [message_id, unit_index]}
+    columns:
+      - name: track_id
+        data_tests:
+          - unique
+          - not_null:
+              config: {severity: warn}
+      - name: message_id
+        data_tests:
+          - relationships:
+              arguments: {to: ref('veloship_shipment'), field: message_id}
+
+  - name: tracking_event
+    description: One row per scan event; business duplicates and late records are kept for the DQ tests.
+    columns:
+      - name: event_id
+        data_tests: [unique, not_null]
+      - name: track_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments: {to: ref('veloship_parcel'), field: track_id}
+              config: {severity: warn}
+      - name: status
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [DATA_RECEIVED, PICKUP, HUB, IN_DELIVERY, DELIVERED, CANCELLED, NOT_DELIVERED, PARCELSHOP]
+              config: {severity: warn}
+      - name: event_time_utc
+        data_tests:
+          - not_null:
+              config: {severity: warn}
+
+  - name: invoice
+    description: One row per invoice or credit note (latest version), with related_invoice_number (gap #1).
+    columns:
+      - name: invoice_number
+        data_tests: [unique, not_null]
+      - name: doc_type
+        data_tests:
+          - accepted_values:
+              arguments: {values: [INVOICE, CREDIT_NOTE]}
+              config: {severity: warn}
+      - name: contact_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments: {to: ref('customer'), field: contact_id}
+              config: {severity: warn}
+
+  - name: invoice_line
+    description: Lines of each invoice's latest version.
+    data_tests:
+      - unique_combination:
+          arguments: {columns: [invoice_number, line_no]}
+    columns:
+      - name: invoice_number
+        data_tests:
+          - relationships:
+              arguments: {to: ref('invoice'), field: invoice_number}
+
+  - name: invoice_surcharge
+    description: Surcharges of each invoice line, 1-based surcharge_index.
+    data_tests:
+      - unique_combination:
+          arguments: {columns: [invoice_number, line_no, surcharge_index]}
+    columns:
+      - name: surcharge_type
+        data_tests:
+          - accepted_values:
+              arguments: {values: [FUEL, PEAK, TOLL, REMOTE_AREA]}
+              config: {severity: warn}
+
+  - name: partner_settlement
+    description: One row per monthly partner settlement (latest version).
+    columns:
+      - name: settlement_id
+        data_tests: [unique, not_null]
+      - name: partner_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments: {to: ref('partner'), field: partner_id}
+              config: {severity: warn}
+
+  - name: gl_balance
+    description: GL balances from the latest complete batch per company and period.
+    data_tests:
+      - unique_combination:
+          arguments: {columns: [company_code, period, gl_account]}
+    columns:
+      - name: account_name
+        data_tests:
+          - accepted_values:
+              arguments: {values: [Parcel revenue domestic, Parcel revenue international, Revenue adjustments]}
+              config: {severity: warn}

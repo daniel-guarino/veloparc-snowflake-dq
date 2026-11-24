@@ -1,4 +1,4 @@
--- Latest version per lead. country_code is ISO 3166-1 alpha-2: kept when the raw value already is one, otherwise
+-- Latest version per lead. country_code is ISO 3166-1 alpha-2: kept when the raw value has 2 letters, otherwise
 -- looked up in REF.COUNTRY_ALIAS; country_raw keeps what was received (mapping decision #9: any non-ISO2 value is a
 -- Validity anomaly, flagged in Phase 9 even when the alias resolves it).
 {{ config(unique_key='lead_id', incremental_strategy='merge') }}
@@ -26,7 +26,7 @@ select
     l.lead_id,
     l.company_name,
     l.country_raw,
-    iff(regexp_like(upper(trim(l.country_raw)), '[A-Z]{2}'), upper(trim(l.country_raw)), ca.ISO2) as country_code,
+    iff(length(trim(l.country_raw)) = 2, upper(trim(l.country_raw)), ca.ISO2) as country_code,
     l.lead_source,
     l.status,
     l.converted_opportunity_id,
