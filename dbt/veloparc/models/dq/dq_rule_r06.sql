@@ -1,5 +1,6 @@
 -- R6: the scan GLN is a depot; the last scan, when DELIVERED, is at a depot in the consignee's zone
 -- (zone = REF.POSTAL_ZONE of the country and the first character of the postal code, as in the generator).
+-- A GLN that is not 13 characters breaks the contract pattern: it is counted by dq_rule_schema, not here.
 with events as ({{ events_with_country() }}),
 last_scan as (
     select * from events
@@ -8,7 +9,7 @@ last_scan as (
 select {{ dq_violation('R6', 'e.event_id', 'tracking_event', 'e.consignee_country', 'e.event_time_utc',
         "'GLN ' || e.location_gln || ' is not a depot'", 'e._event_id', 'e._source_txn_id', 'e._file_name', 'e._kafka_offset') }}
 from events e
-where e.location_gln is not null and e.location_gln not in (select gln from {{ ref('depot') }})
+where length(e.location_gln) = 13 and e.location_gln not in (select gln from {{ ref('depot') }})
 union all
 select {{ dq_violation('R6', 'l.track_id', 'tracking_event', 'l.consignee_country', 'l.event_time_utc',
         "'last scan at ' || l.location_gln || ' outside consignee zone'", 'l._event_id', 'l._source_txn_id', 'l._file_name', 'l._kafka_offset') }}

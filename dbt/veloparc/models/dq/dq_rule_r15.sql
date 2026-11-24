@@ -1,5 +1,6 @@
 -- R15: valid GS1 check digit in SSCCs (shipments), depot GLNs, partner base depots and scan GLNs; the customer's
--- vatNumber starts with its country code (latest version).
+-- vatNumber starts with its country code (latest version). Scan GLNs that are not 13 characters break the contract
+-- pattern and are counted by dq_rule_schema, not here (as in the generator's checker).
 select {{ dq_violation('R15', 'p.track_id', 'veloship_shipment', 's.consignee_country', 's.shipping_date',
         "'invalid SSCC ' || p.sscc", 's._event_id', 's._source_txn_id', 's._file_name', 's._kafka_offset') }}
 from {{ ref('veloship_parcel') }} p
@@ -27,4 +28,4 @@ union all
 select {{ dq_violation('R15', 'e.event_id', 'tracking_event', 'e.consignee_country', 'e.event_time_utc',
         "'invalid GLN ' || e.location_gln", 'e._event_id', 'e._source_txn_id', 'e._file_name', 'e._kafka_offset') }}
 from ({{ events_with_country() }}) e
-where e.location_gln is not null and not coalesce({{ gs1_is_valid('e.location_gln', 13) }}, false)
+where length(e.location_gln) = 13 and not coalesce({{ gs1_is_valid('e.location_gln', 13) }}, false)
