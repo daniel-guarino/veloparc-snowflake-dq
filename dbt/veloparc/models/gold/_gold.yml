@@ -4,143 +4,386 @@ version: 2
 # Every dimension has an unknown member ('-1', depot '0000000000000', date -1), so fact keys are never NULL.
 
 models:
-  - name: dim_date
-    columns:
-      - name: date_key
-        data_tests: [unique, not_null]
-      - name: full_date
-        data_tests: [unique, not_null]
-
-  - name: dim_customer
-    description: SCD2 customer versions; point-in-time lookups use valid_from <= ts < coalesce(valid_to, 9999-12-31).
+- name: dim_date
+  columns:
+  - name: date_key
+    description: YYYYMMDD smart key; -1 = unknown (1900-01-01).
     data_tests:
-      - unique_combination:
-          arguments: {columns: [contact_id, version_number]}
-    columns:
-      - name: customer_sk
-        data_tests: [unique, not_null]
-
-  - name: dim_depot
-    columns:
-      - name: depot_gln
-        data_tests: [unique, not_null]
-
-  - name: dim_partner_zone
-    columns:
-      - name: partner_zone_sk
-        data_tests: [unique, not_null]
-      - name: zone_code
-        description: R16 - each zone is served by exactly one partner.
-        data_tests:
-          - unique:
-              config: {severity: warn}
-
-  - name: dim_tariff
-    description: One row per tariff x weight band.
-    columns:
-      - name: tariff_sk
-        data_tests: [unique, not_null]
-      - name: customer_sk
-        data_tests:
-          - not_null
-          - relationships:
-              arguments: {to: ref('dim_customer'), field: customer_sk}
-
-  - name: fct_invoice_line
-    description: One row per invoice line; amount_eur = net amount x fx rate of the issue date.
+    - unique
+    - not_null
+  - name: full_date
+    description: Calendar day.
     data_tests:
-      - unique_combination:
-          arguments: {columns: [invoice_number, line_no]}
-    columns:
-      - name: customer_sk
-        data_tests:
-          - not_null
-          - relationships:
-              arguments: {to: ref('dim_customer'), field: customer_sk}
-      - name: tariff_sk
-        data_tests:
-          - not_null
-          - relationships:
-              arguments: {to: ref('dim_tariff'), field: tariff_sk}
-      - name: invoice_date_key
-        data_tests:
-          - relationships:
-              arguments: {to: ref('dim_date'), field: date_key}
-      - name: track_id
-        data_tests:
-          - relationships:
-              arguments: {to: ref('fct_parcel'), field: track_id}
-
-  - name: fct_gl_revenue
+    - unique
+    - not_null
+  - name: year
+    description: Year.
+  - name: month
+    description: Month 1-12.
+  - name: period
+    description: YYYY-MM, joins the monthly facts.
+  - name: iso_week
+    description: ISO-8601 week.
+  - name: is_weekend
+    description: Saturday or Sunday.
+- name: dim_customer
+  description: SCD2 customer versions; point-in-time lookups use valid_from <= ts < coalesce(valid_to, 9999-12-31).
+  data_tests:
+  - unique_combination:
+      arguments:
+        columns:
+        - contact_id
+        - version_number
+  columns:
+  - name: customer_sk
+    description: Hash surrogate key of the version; '-1' = unknown customer.
     data_tests:
-      - unique_combination:
-          arguments: {columns: [company_code, period, gl_account]}
-
-  - name: fct_parcel
-    description: One row per parcel; is_inferred for track IDs seen only in events or invoices (R2).
-    columns:
-      - name: track_id
-        data_tests: [unique, not_null]
-      - name: customer_sk
-        data_tests:
-          - not_null
-          - relationships:
-              arguments: {to: ref('dim_customer'), field: customer_sk}
-      - name: partner_zone_sk
-        data_tests:
-          - relationships:
-              arguments: {to: ref('dim_partner_zone'), field: partner_zone_sk}
-      - name: shipping_date_key
-        data_tests:
-          - relationships:
-              arguments: {to: ref('dim_date'), field: date_key}
-
-  - name: fct_parcel_event
-    description: One row per scan; is_duplicate marks repeated (track_id, status, GLN) scans (R4).
-    columns:
-      - name: event_id
-        data_tests: [unique, not_null]
-      - name: track_id
-        data_tests:
-          - relationships:
-              arguments: {to: ref('fct_parcel'), field: track_id}
-      - name: depot_gln
-        data_tests:
-          - relationships:
-              arguments: {to: ref('dim_depot'), field: depot_gln}
-      - name: event_date_key
-        data_tests:
-          - relationships:
-              arguments: {to: ref('dim_date'), field: date_key}
-
-  - name: fct_partner_cost
-    columns:
-      - name: settlement_id
-        data_tests: [unique, not_null]
-      - name: partner_zone_sk
-        data_tests:
-          - relationships:
-              arguments: {to: ref('dim_partner_zone'), field: partner_zone_sk}
-      - name: total_cost_eur
-        data_tests:
-          - not_null:
-              config: {severity: warn}
-
-  - name: fct_opportunity
-    columns:
-      - name: opportunity_id
-        data_tests: [unique, not_null]
-      - name: customer_sk
-        data_tests:
-          - relationships:
-              arguments: {to: ref('dim_customer'), field: customer_sk}
-
-  - name: fct_lead
-    columns:
-      - name: lead_id
-        data_tests: [unique, not_null]
-      - name: converted_opportunity_id
-        data_tests:
-          - relationships:
-              arguments: {to: ref('fct_opportunity'), field: opportunity_id}
-              config: {severity: warn}
+    - unique
+    - not_null
+  - name: contact_id
+    description: Customer id.
+  - name: group_customer_id
+    description: Corporate group.
+  - name: customer_name
+    description: Name.
+  - name: country_code
+    description: Country.
+  - name: segment
+    description: Segment.
+  - name: vat_number
+    description: VAT number.
+  - name: valid_from
+    description: Version start (silver updated_at).
+  - name: valid_to
+    description: Next version's start; NULL for the current one.
+  - name: is_current
+    description: Latest version of the contact.
+  - name: version_number
+    description: 1 = first version received.
+- name: dim_depot
+  columns:
+  - name: depot_gln
+    description: GLN; '0000000000000' = unknown depot (R6).
+    data_tests:
+    - unique
+    - not_null
+  - name: depot_name
+    description: Name.
+  - name: depot_type
+    description: Type.
+  - name: country_code
+    description: Country.
+  - name: city
+    description: City.
+- name: dim_partner_zone
+  columns:
+  - name: partner_zone_sk
+    description: Hash surrogate key of partner x zone; '-1' = unknown.
+    data_tests:
+    - unique
+    - not_null
+  - name: partner_id
+    description: Partner id.
+  - name: zone_code
+    description: 'Zone (R16: unique).'
+    data_tests:
+    - unique:
+        config:
+          severity: warn
+  - name: partner_name
+    description: Partner name.
+  - name: country_code
+    description: Partner country.
+  - name: base_depot_gln
+    description: Base depot GLN.
+- name: dim_tariff
+  description: One row per tariff x weight band.
+  columns:
+  - name: tariff_sk
+    description: Hash surrogate key of tariff x band; '-1' = unknown.
+    data_tests:
+    - unique
+    - not_null
+  - name: tariff_id
+    description: Tariff id.
+  - name: band_index
+    description: Band position.
+  - name: customer_sk
+    description: Customer version valid at valid_from.
+    data_tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('dim_customer')
+          field: customer_sk
+  - name: product
+    description: Product.
+  - name: zone_code
+    description: Zone.
+  - name: weight_from_kg
+    description: Band lower bound (exclusive).
+  - name: weight_to_kg
+    description: Band upper bound (inclusive).
+  - name: price
+    description: Band price.
+  - name: currency
+    description: Currency.
+  - name: fuel_surcharge_pct
+    description: Fuel surcharge, percentage points.
+  - name: valid_from
+    description: Validity start.
+  - name: valid_to
+    description: Validity end.
+- name: fct_invoice_line
+  description: One row per invoice line; amount_eur = net amount x fx rate of the issue date.
+  data_tests:
+  - unique_combination:
+      arguments:
+        columns:
+        - invoice_number
+        - line_no
+  columns:
+  - name: invoice_number
+    description: Invoice number (degenerate).
+  - name: line_no
+    description: Line number.
+  - name: customer_sk
+    description: Customer version valid at the issue date.
+    data_tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('dim_customer')
+          field: customer_sk
+  - name: tariff_sk
+    description: Tariff band containing the line weight.
+    data_tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('dim_tariff')
+          field: tariff_sk
+  - name: track_id
+    description: Invoiced parcel (to fct_parcel).
+    data_tests:
+    - relationships:
+        arguments:
+          to: ref('fct_parcel')
+          field: track_id
+  - name: invoice_date_key
+    description: Issue date key.
+    data_tests:
+    - relationships:
+        arguments:
+          to: ref('dim_date')
+          field: date_key
+  - name: doc_type
+    description: INVOICE or CREDIT_NOTE.
+  - name: related_invoice_number
+    description: Invoice a credit note corrects.
+  - name: billing_period
+    description: Billed month.
+  - name: billing_country
+    description: 'Issuing company country (invoice number prefix): the R13 key.'
+  - name: currency
+    description: Invoice currency.
+  - name: amount_local
+    description: Line net amount, invoice currency.
+  - name: fx_rate_eur
+    description: EUR per unit, rate of the issue date.
+  - name: amount_eur
+    description: Line net amount in EUR (R13).
+  - name: fuel_surcharge_eur
+    description: FUEL surcharges of the line, EUR.
+- name: fct_gl_revenue
+  data_tests:
+  - unique_combination:
+      arguments:
+        columns:
+        - company_code
+        - period
+        - gl_account
+  columns:
+  - name: company_code
+    description: Company.
+  - name: period
+    description: Month.
+  - name: gl_account
+    description: GL account.
+  - name: country_code
+    description: Country.
+  - name: amount_eur
+    description: Ledger revenue, EUR (R13 target).
+- name: fct_parcel
+  description: One row per parcel; is_inferred for track IDs seen only in events or invoices (R2).
+  columns:
+  - name: track_id
+    description: Parcel TrackID.
+    data_tests:
+    - unique
+    - not_null
+  - name: customer_sk
+    description: Customer version valid at the shipping date.
+    data_tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('dim_customer')
+          field: customer_sk
+  - name: partner_zone_sk
+    description: Delivery zone (REF.POSTAL_ZONE from the consignee address, else the invoice zone).
+    data_tests:
+    - relationships:
+        arguments:
+          to: ref('dim_partner_zone')
+          field: partner_zone_sk
+  - name: shipping_date_key
+    description: Shipping date key.
+    data_tests:
+    - relationships:
+        arguments:
+          to: ref('dim_date')
+          field: date_key
+  - name: parcel_number
+    description: Parcel number.
+  - name: sscc
+    description: SSCC.
+  - name: product
+    description: Product.
+  - name: incoterm_code
+    description: Incoterm.
+  - name: consignee_country
+    description: Consignee country.
+  - name: weight_kg
+    description: Weight.
+  - name: pickup_ts
+    description: First PICKUP scan, UTC.
+  - name: delivered_ts
+    description: First DELIVERED scan, UTC.
+  - name: is_delivered
+    description: A DELIVERED scan exists.
+  - name: is_inferred
+    description: 'Built from events or invoices only: the TrackID has no shipment (R2).'
+- name: fct_parcel_event
+  description: One row per scan; is_duplicate marks repeated (track_id, status, GLN) scans (R4).
+  columns:
+  - name: event_id
+    description: Scan event id.
+    data_tests:
+    - unique
+    - not_null
+  - name: track_id
+    description: Parcel (to fct_parcel).
+    data_tests:
+    - relationships:
+        arguments:
+          to: ref('fct_parcel')
+          field: track_id
+  - name: depot_gln
+    description: Scan location; unknown depot when not in master data; NULL for DATA_RECEIVED.
+    data_tests:
+    - relationships:
+        arguments:
+          to: ref('dim_depot')
+          field: depot_gln
+  - name: event_date_key
+    description: Local business date of the scan.
+    data_tests:
+    - relationships:
+        arguments:
+          to: ref('dim_date')
+          field: date_key
+  - name: status
+    description: Status.
+  - name: event_ts
+    description: Scan time, UTC.
+  - name: reason_code
+    description: Reason for NOT_DELIVERED.
+  - name: capture_delay_min
+    description: 'Minutes from scan to record (R5: negative = violation).'
+  - name: is_duplicate
+    description: Repeated (track_id, status, GLN) scan after the first (R4).
+- name: fct_partner_cost
+  columns:
+  - name: settlement_id
+    description: Settlement id.
+    data_tests:
+    - unique
+    - not_null
+  - name: partner_zone_sk
+    description: Partner x zone.
+    data_tests:
+    - relationships:
+        arguments:
+          to: ref('dim_partner_zone')
+          field: partner_zone_sk
+  - name: period
+    description: Month.
+  - name: stops
+    description: Stops.
+  - name: delivered_parcels
+    description: Declared delivered parcels (R11).
+  - name: failed_attempts
+    description: Failed attempts.
+  - name: currency
+    description: Settlement currency.
+  - name: total_cost_local
+    description: Total cost, settlement currency.
+  - name: total_cost_eur
+    description: Total cost in EUR at the month's average rate.
+    data_tests:
+    - not_null:
+        config:
+          severity: warn
+- name: fct_opportunity
+  columns:
+  - name: opportunity_id
+    description: Opportunity id.
+    data_tests:
+    - unique
+    - not_null
+  - name: customer_sk
+    description: Current customer version; NULL while there is no customer.
+    data_tests:
+    - relationships:
+        arguments:
+          to: ref('dim_customer')
+          field: customer_sk
+  - name: close_date_key
+    description: Close date key.
+  - name: stage
+    description: Stage.
+  - name: currency
+    description: Currency.
+  - name: amount_local
+    description: Amount, opportunity currency.
+  - name: amount_eur
+    description: Amount in EUR (close-date rate, or the last available).
+  - name: country_code
+    description: Country.
+  - name: expected_parcels_month
+    description: Expected parcels per month.
+- name: fct_lead
+  columns:
+  - name: lead_id
+    description: Lead id.
+    data_tests:
+    - unique
+    - not_null
+  - name: created_date_key
+    description: Creation date key.
+  - name: converted_opportunity_id
+    description: Converted opportunity.
+    data_tests:
+    - relationships:
+        arguments:
+          to: ref('fct_opportunity')
+          field: opportunity_id
+        config:
+          severity: warn
+  - name: country_code
+    description: ISO country.
+  - name: lead_source
+    description: Lead source.
+  - name: status
+    description: Status.
