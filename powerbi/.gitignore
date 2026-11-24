@@ -1,0 +1,16 @@
+# Power BI Desktop writes local state next to the project. None of it belongs in git:
+# .pbi/ holds cache.abf (a copy of the imported data), localSettings.json (user and machine settings),
+# unappliedChanges.json and editor state. Credentials are kept by Desktop outside the project folder.
+**/.pbi/
+*.abf
+localSettings.json
+cache.abf
+
+# Binary report formats: this project is versioned as PBIP (TMDL + PBIR text) only.
+*.pbix
+*.pbit
+
+# Exports and temp files
+*.pdf
+*.pptx
+~$*
