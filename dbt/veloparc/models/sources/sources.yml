@@ -1,0 +1,52 @@
+version: 2
+
+sources:
+  - name: bronze
+    description: >
+      Bronze views over the RAW_* tables (ADR 0004): every loaded row plus the dedup flags _IS_TECH_DUP and
+      _IS_RESEND. stg_ models read these and drop flagged rows. Created by infra/snowflake (R__bronze_views.sql).
+    database: VLP_DP
+    schema: BRONZE
+    tables:
+      - name: V_RAW_VELOSHIP_SHIPMENTS
+        description: VeloShip shipment requests and responses.
+      - name: V_RAW_TRACKING_EVENTS
+        description: Scan events.
+      - name: V_RAW_INVOICES
+        description: Invoices and credit notes.
+      - name: V_RAW_CRM_OBJECTS
+        description: CRM leads and opportunities.
+      - name: V_RAW_PARTNER_SETTLEMENTS
+        description: Monthly partner settlements (file-based).
+      - name: V_RAW_TARIFFS
+        description: Customer tariffs (file-based).
+      - name: V_RAW_GL_EXTRACT
+        description: Monthly GL extract rows (file-based).
+      - name: V_RAW_MASTER_DATA
+        description: Customers, depots and partners (file-based).
+      - name: V_GL_BATCH_COMPLETENESS
+        description: GL batches, rows received vs announced in vlp_batch_count.
+
+  - name: ref
+    description: Generator reference tables, loaded by bronze-load from @BRONZE.GENERATOR/reference.
+    database: VLP_DP
+    schema: REF
+    tables:
+      - name: FX_RATE_DAILY
+        columns:
+          - name: RATE_TO_EUR
+            data_tests: [not_null]
+      - name: POSTAL_ZONE
+      - name: COUNTRY_ALIAS
+        columns:
+          - name: ALIAS_NORM
+            data_tests: [unique, not_null]
+
+  - name: generator
+    description: The generator's run manifests and answer key, loaded by bronze-load from @BRONZE.GENERATOR/runs.
+    database: VLP_DP
+    schema: DQ
+    tables:
+      - name: GENERATOR_RUNS
+      - name: ANOMALY_GROUND_TRUTH
+      - name: GENERATOR_RULE_VIOLATIONS

@@ -30,6 +30,7 @@ The token expires after 90 days. To rotate it, see the comment at the end of the
 | `V1.5.0__bronze_load_audit.sql` | `BRONZE.LOAD_AUDIT`: one row per topic per run of the file loader (`bronze-load` workflow) |
 | `R__bronze_connector_tasks.sql` | **Generated**, repeatable. Change tracking on the `KAFKA_*` tables, an append-only stream per table (created once, `SHOW_INITIAL_ROWS`) and a triggered task on `WH_LOAD` that inserts the new connector rows into the `RAW_*` table |
 | `V1.6.0__ref_and_generator_manifests.sql` | `REF.FX_RATE_DAILY`, `REF.POSTAL_ZONE`, `REF.COUNTRY_ALIAS`; `DQ.GENERATOR_RUNS`, `DQ.ANOMALY_GROUND_TRUTH`, `DQ.GENERATOR_RULE_VIOLATIONS`; file formats for the generator stage |
+| `V1.7.0__dbt_project_schema.sql` | Schema `VLP_DP.DBT` for the dbt project object `VELOPARC`, deployed and executed by the `dbt` workflow |
 | `R__bronze_views.sql` | **Generated**, repeatable. `V_RAW_*` (every row plus `_IS_TECH_DUP` and `_IS_RESEND`) and `V_GL_BATCH_COMPLETENESS`: the sources dbt reads |
 
 The migrations are applied with [schemachange](https://github.com/Snowflake-Labs/schemachange); the history is in

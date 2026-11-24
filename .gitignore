@@ -67,3 +67,10 @@ Thumbs.db
 
 # --- Claude Code local settings ---
 .claude/settings.local.json
+
+# --- dbt ---
+dbt/veloparc/target/
+dbt/veloparc/dbt_packages/
+dbt/veloparc/logs/
+dbt/veloparc/.ci/
+dbt/veloparc/.user.yml

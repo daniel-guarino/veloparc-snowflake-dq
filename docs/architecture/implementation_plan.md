@@ -246,10 +246,19 @@ dbt starts at the bronze views and implements the source → silver mapping colu
 
 **Setup**
 
-1. `dbt-core` + `dbt-snowflake` in `pyproject.toml`, pinned versions. `profiles.yml` with `env_var()` only and private-key authentication; targets `dev` (schema `DBT_DANIEL`), `ci` (schema per PR) and `prd`.
-2. Packages: `dbt_utils`, `dbt_expectations` (domain, range and regex tests) and `elementary` (test result history and volume and freshness anomalies).
-3. `sources.yml` with the bronze views, `loaded_at_field: _LOAD_TS` and `freshness` (warn at 2 h, error at 6 h) for hourly topics.
-4. Sources for `REF.COUNTRY_ALIAS`, `REF.POSTAL_ZONE`, `REF.FX_RATE_DAILY` (generated in Phase 2, loaded in Phase 6); seed only for `unknown_members`.
+1. **dbt Projects on Snowflake** (dbt Core 1.12.3): the `dbt` workflow deploys `dbt/veloparc/` as the object
+   `VLP_DP.DBT.VELOPARC` with Snowflake CLI (`snow dbt deploy`, PAT of the CI user) and runs `snow dbt execute`.
+   `dbt_projects_profiles.yml` has no credentials: models run with `VLP_TRANSFORMER` on `WH_TRANSFORM`. The code is
+   visible in Snowsight, but the repository is the source of truth. `dbt-core` 1.12.3 is also pinned in the dev
+   dependencies so CI runs `dbt parse` offline (`make dbt-parse`, part of `make lint`).
+2. **No Hub packages** for now: `dbt deps` inside Snowflake would need an external access integration (an
+   ACCOUNTADMIN object). Surrogate keys use the project's own `surrogate_key()` macro (MD5, like
+   `dbt_utils.generate_surrogate_key`). `dbt_expectations` / `elementary` are reconsidered in Phase 9.
+3. Sources: the bronze views (`V_RAW_*`, `V_GL_BATCH_COMPLETENESS`), `REF.*` and the generator tables in `DQ`.
+   Singular tests on the sources close Phase 6: file rows per topic = messages in `run_manifest.json`, rows after
+   dedup = live records, GL batches complete (warning).
+4. Schemas used as named (`generate_schema_name`): models write straight to `SILVER`, `GOLD` and `DQ`; no per-PR
+   schemas on a single trial account.
 5. Conventions: `stg_<source>` as views, `silver` as `incremental` with `merge` and `unique_key`, `gold` as table or incremental. Macros for repeated patterns: `parse_ts_utc()`, `latest_version()` (QUALIFY per key), `not_quarantined()`.
 
 **Build order for silver models** (the same as the generator, so each step can test references to the previous ones):

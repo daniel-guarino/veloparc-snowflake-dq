@@ -1,0 +1,13 @@
+# Profile used by dbt Projects on Snowflake (takes precedence over profiles.yml). No credentials: Snowflake runs
+# the project as the calling user, with the privileges of the role below.
+veloparc:
+  target: prod
+  outputs:
+    prod:
+      type: snowflake
+      database: VLP_DP
+      schema: SILVER
+      role: VLP_TRANSFORMER
+      warehouse: WH_TRANSFORM
+      threads: 4
+      query_tag: veloparc-dbt
