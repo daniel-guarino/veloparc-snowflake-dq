@@ -173,6 +173,23 @@ def snowflake_check() -> None:
     typer.echo("OK")
 
 
+@app.command("snowflake-inspect")
+def snowflake_inspect() -> None:
+    """Read-only: connector tables, landing and generator stages, UDF packages (input for the bronze layer)."""
+    import json
+
+    from veloparc_gen import snowflake_inspect as inspect_mod
+    from veloparc_gen.snowflake_conn import MissingSnowflakeSettings
+
+    try:
+        result = inspect_mod.run()
+    except MissingSnowflakeSettings as exc:
+        typer.secho(str(exc), fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(json.dumps(result, indent=2, default=str))
+    typer.echo("OK")
+
+
 @app.command("connector-deploy")
 def connector_deploy() -> None:
     """Rotate the connector key pair and create/update the Aiven Snowflake sink connector."""

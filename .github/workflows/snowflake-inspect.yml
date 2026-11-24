@@ -1,0 +1,46 @@
+# Manual, read-only: what is already in Snowflake before the bronze layer is written (Phase 6). Connector tables
+# (owner, offsets, RECORD_METADATA keys and header types), landing and generator stages, Python packages for UDFs.
+# Runs only SHOW, LIST and SELECT, as SVC_VELOPARC_CI (PAT) with role VLP_DEPLOYER.
+name: snowflake-inspect
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: snowflake-inspect
+  cancel-in-progress: false
+
+jobs:
+  inspect:
+    name: inspect Snowflake
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: dev
+    env:
+      SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+      SNOWFLAKE_PAT: ${{ secrets.SNOWFLAKE_PAT }}
+      SNOWFLAKE_USER: ${{ vars.SNOWFLAKE_USER || 'SVC_VELOPARC_CI' }}
+      SNOWFLAKE_ROLE: VLP_DEPLOYER
+      SNOWFLAKE_WAREHOUSE: WH_DEPLOY
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - uses: astral-sh/setup-uv@v10.4.0
+        with:
+          enable-cache: true
+
+      - name: Install pinned dependencies
+        run: uv sync --frozen --no-dev
+
+      - name: Inspect
+        run: uv run --no-dev veloparc-gen snowflake-inspect | tee inspect.txt
+
+      - name: Keep the result
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: snowflake-inspect
+          path: inspect.txt
+          retention-days: 14
