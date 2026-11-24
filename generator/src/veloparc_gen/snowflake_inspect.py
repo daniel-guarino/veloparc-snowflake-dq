@@ -8,13 +8,16 @@ Answers the questions the bronze mapping depends on, from the real objects rathe
 - generator stage: the run manifests, reference tables and state files;
 - Python packages available to UDFs (jsonschema and the packages its format checks need).
 
-Only SHOW, LIST and SELECT statements are run. Payload values are fictitious; no account identifiers are printed.
+Only SHOW, LIST and SELECT statements are run. A failing statement is recorded under "errors" and the inspection
+goes on, so one run shows every problem. Payload values are fictitious; no account identifiers are printed.
+Column aliases avoid Snowflake reserved words (ROWS, PARTITION, ...).
 """
 
 # ruff: noqa: S608  -- identifiers are module constants, or table names from SHOW checked against _IDENT
 
 from __future__ import annotations
 
+import json
 import re
 from collections import defaultdict
 
@@ -23,7 +26,7 @@ BRONZE = f"{DATABASE}.BRONZE"
 LANDING = f"{BRONZE}.LANDING"
 GENERATOR = f"{BRONZE}.GENERATOR"
 FILE_FORMAT = f"{BRONZE}.FF_LANDING_JSONL"
-HEADER_SAMPLE_ROWS = 200
+SAMPLE_ROWS = 200
 
 UDF_PACKAGES = (
     "jsonschema",
@@ -46,66 +49,29 @@ _TOPIC = re.compile(r"landing/kafka/([^/]+)/")
 _IDENT = re.compile(r"^[A-Z][A-Z0-9_]*$")
 
 
-def _rows(cur) -> list[dict]:
-    """Rows of the last statement as dicts keyed by lower-case column name."""
-    names = [d[0].lower() for d in (cur.description or [])]
-    return [dict(zip(names, row, strict=False)) for row in cur.fetchall() or []]
-
-
-def _run(cur, sql: str) -> list[dict]:
-    cur.execute(sql)
-    return _rows(cur)
-
-
 def _quote(text: str) -> str:
     return text.replace("'", "''")
 
 
-def connector_tables(cur) -> dict[str, dict]:
-    tables = _run(cur, f"SHOW TABLES LIKE 'KAFKA%' IN SCHEMA {BRONZE}")
-    result: dict[str, dict] = {}
-    for table in sorted(tables, key=lambda t: t["name"]):
-        name = str(table["name"])
-        if not _IDENT.match(name):  # names come from SHOW; refuse anything that is not a plain identifier
-            continue
-        fq = f"{BRONZE}.{name}"
-        partitions = _run(
-            cur,
-            f"""SELECT RECORD_METADATA:partition::INT AS partition, COUNT(*) AS rows,
-                   MIN(RECORD_METADATA:offset::NUMBER) AS min_offset,
-                   MAX(RECORD_METADATA:offset::NUMBER) AS max_offset,
-                   COUNT(DISTINCT RECORD_METADATA:offset::NUMBER) AS distinct_offsets,
-                   MIN(RECORD_METADATA:CreateTime::NUMBER) AS min_create_time_ms,
-                   MAX(RECORD_METADATA:CreateTime::NUMBER) AS max_create_time_ms
-            FROM {fq} GROUP BY 1 ORDER BY 1""",
-        )
-        metadata_keys = _run(
-            cur,
-            f"""SELECT m.key AS key, TYPEOF(m.value) AS type, COUNT(*) AS n,
-                   ANY_VALUE(LEFT(m.value::VARCHAR, 80)) AS example
-            FROM (SELECT RECORD_METADATA FROM {fq} LIMIT {HEADER_SAMPLE_ROWS}) s,
-                 LATERAL FLATTEN(input => s.RECORD_METADATA) m
-            WHERE m.key <> 'headers' GROUP BY 1, 2 ORDER BY 1, 2""",
-        )
-        headers = _run(
-            cur,
-            f"""SELECT h.key AS key, TYPEOF(h.value) AS type, COUNT(*) AS n,
-                   ANY_VALUE(LEFT(h.value::VARCHAR, 80)) AS example
-            FROM (SELECT RECORD_METADATA FROM {fq} LIMIT {HEADER_SAMPLE_ROWS}) s,
-                 LATERAL FLATTEN(input => s.RECORD_METADATA:headers) h
-            GROUP BY 1, 2 ORDER BY 1, 2""",
-        )
-        content = _run(cur, f"SELECT TYPEOF(RECORD_CONTENT) AS type, COUNT(*) AS n FROM {fq} GROUP BY 1 ORDER BY 1")
-        result[name] = {
-            "owner": table.get("owner"),
-            "change_tracking": table.get("change_tracking"),
-            "rows": table.get("rows"),
-            "partitions": partitions,
-            "record_metadata_keys": metadata_keys,
-            "headers": headers,
-            "record_content_types": content,
-        }
-    return result
+def _json_type(value) -> str:
+    if value is None:
+        return "null"
+    if isinstance(value, bool):
+        return "boolean"
+    if isinstance(value, int | float):
+        return "number"
+    return {dict: "object", list: "array", str: "string"}.get(type(value), type(value).__name__)
+
+
+def describe_envelope(envelope: dict) -> dict:
+    """Shape of one landing line (keys and JSON types), without its values."""
+    payload = envelope.get("payload")
+    headers = envelope.get("_kafka_headers")
+    return {
+        "envelope_keys": {k: _json_type(v) for k, v in envelope.items()},
+        "header_types": {k: _json_type(v) for k, v in headers.items()} if isinstance(headers, dict) else None,
+        "payload_keys": sorted(payload) if isinstance(payload, dict) else None,
+    }
 
 
 def summarize_landing(listed: list[dict]) -> dict[str, dict]:
@@ -127,61 +93,123 @@ def summarize_landing(listed: list[dict]) -> dict[str, dict]:
     return dict(sorted(topics.items()))
 
 
-def landing(cur) -> dict:
-    topics = summarize_landing(_run(cur, f"LIST @{LANDING}/landing/kafka/"))
-    for topic, info in topics.items():
-        sample = _run(
-            cur,
-            f"""SELECT OBJECT_KEYS($1) AS envelope_keys, TYPEOF($1:payload) AS payload_type,
-                   TYPEOF($1:_kafka_timestamp) AS timestamp_type, TYPEOF($1:_kafka_offset) AS offset_type,
-                   OBJECT_KEYS($1:_kafka_headers) AS header_keys,
-                   IFF(IS_OBJECT($1:payload), OBJECT_KEYS($1:payload), NULL) AS payload_keys
-            FROM @{LANDING}/landing/kafka/{_quote(topic)}/ (FILE_FORMAT => '{FILE_FORMAT}') LIMIT 1""",
-        )
-        info["sample"] = sample[0] if sample else None
-    return topics
-
-
-def generator_stage(cur) -> list[dict]:
-    listed = _run(cur, f"LIST @{GENERATOR}")
-    return [{"name": row.get("name"), "size": row.get("size")} for row in sorted(listed, key=lambda r: r["name"])]
-
-
 def _version_key(version: str) -> tuple:
     return tuple(int(p) if p.isdigit() else 0 for p in re.split(r"[.+-]", version))
 
 
-def udf_packages(cur) -> dict[str, dict[str, list[str]]]:
-    names = ", ".join(f"'{p}'" for p in UDF_PACKAGES)
-    rows = _run(
-        cur,
-        f"""SELECT PACKAGE_NAME AS package, VERSION AS version, RUNTIME_VERSION AS runtime
-        FROM {DATABASE}.INFORMATION_SCHEMA.PACKAGES WHERE LANGUAGE = 'python' AND PACKAGE_NAME IN ({names})""",
-    )
-    found: dict[str, dict[str, set[str]]] = defaultdict(lambda: defaultdict(set))
-    for row in rows:
-        found[str(row["package"])][str(row.get("runtime") or "any")].add(str(row["version"]))
-    result: dict[str, dict[str, list[str]]] = {}
-    for package in UDF_PACKAGES:
-        runtimes = found.get(package, {})
-        result[package] = {rt: sorted(v, key=_version_key)[-3:] for rt, v in sorted(runtimes.items())}
-    return result
+class Inspector:
+    def __init__(self, cur):
+        self.cur = cur
+        self.errors: list[dict] = []
 
+    def run(self, label: str, sql: str) -> list[dict] | None:
+        """Rows as dicts keyed by lower-case column name; None (and an error entry) if the statement fails."""
+        try:
+            self.cur.execute(sql)
+            names = [d[0].lower() for d in (self.cur.description or [])]
+            return [dict(zip(names, row, strict=False)) for row in self.cur.fetchall() or []]
+        except Exception as exc:  # recorded and reported at the end
+            self.errors.append({"query": label, "error": " ".join(str(exc).split())[:500]})
+            return None
 
-def bronze_objects(cur) -> dict[str, list[str]]:
-    tables = _run(cur, f"SHOW TABLES IN SCHEMA {BRONZE}")
-    views = _run(cur, f"SHOW VIEWS IN SCHEMA {BRONZE}")
-    return {"tables": sorted(str(t["name"]) for t in tables), "views": sorted(str(v["name"]) for v in views)}
+    def bronze_objects(self) -> dict:
+        tables = self.run("show tables", f"SHOW TABLES IN SCHEMA {BRONZE}") or []
+        views = self.run("show views", f"SHOW VIEWS IN SCHEMA {BRONZE}") or []
+        return {"tables": sorted(str(t["name"]) for t in tables), "views": sorted(str(v["name"]) for v in views)}
+
+    def connector_tables(self) -> dict[str, dict]:
+        tables = self.run("show connector tables", f"SHOW TABLES LIKE 'KAFKA%' IN SCHEMA {BRONZE}") or []
+        result: dict[str, dict] = {}
+        for table in sorted(tables, key=lambda t: t["name"]):
+            name = str(table["name"])
+            if not _IDENT.match(name):  # names come from SHOW; refuse anything that is not a plain identifier
+                continue
+            fq = f"{BRONZE}.{name}"
+            sample = f"(SELECT RECORD_METADATA FROM {fq} LIMIT {SAMPLE_ROWS}) s"
+            result[name] = {
+                "owner": table.get("owner"),
+                "change_tracking": table.get("change_tracking"),
+                "row_count": table.get("rows"),
+                "partitions": self.run(
+                    f"{name} partitions",
+                    f"""SELECT RECORD_METADATA:partition::INT AS kafka_partition, COUNT(*) AS record_count,
+                           MIN(RECORD_METADATA:offset::NUMBER) AS min_offset,
+                           MAX(RECORD_METADATA:offset::NUMBER) AS max_offset,
+                           COUNT(DISTINCT RECORD_METADATA:offset::NUMBER) AS distinct_offsets,
+                           MIN(RECORD_METADATA:CreateTime::NUMBER) AS min_create_time_ms,
+                           MAX(RECORD_METADATA:CreateTime::NUMBER) AS max_create_time_ms
+                    FROM {fq} GROUP BY 1 ORDER BY 1""",
+                ),
+                "record_metadata_keys": self.run(
+                    f"{name} metadata keys",
+                    f"""SELECT m.key AS meta_key, TYPEOF(m.value) AS value_type, COUNT(*) AS record_count,
+                           ANY_VALUE(LEFT(TO_JSON(m.value), 80)) AS sample_value
+                    FROM {sample}, LATERAL FLATTEN(input => s.RECORD_METADATA) m
+                    WHERE m.key <> 'headers' GROUP BY 1, 2 ORDER BY 1, 2""",
+                ),
+                "headers": self.run(
+                    f"{name} headers",
+                    f"""SELECT h.key AS header_key, TYPEOF(h.value) AS value_type, COUNT(*) AS record_count,
+                           ANY_VALUE(LEFT(TO_JSON(h.value), 80)) AS sample_value
+                    FROM {sample}, LATERAL FLATTEN(input => s.RECORD_METADATA:headers) h
+                    GROUP BY 1, 2 ORDER BY 1, 2""",
+                ),
+                "record_content_types": self.run(
+                    f"{name} content types",
+                    f"SELECT TYPEOF(RECORD_CONTENT) AS value_type, COUNT(*) AS record_count FROM {fq} GROUP BY 1",
+                ),
+            }
+        return result
+
+    def landing(self) -> dict:
+        listed = self.run("list landing", f"LIST @{LANDING}/landing/kafka/") or []
+        topics = summarize_landing(listed)
+        for topic, info in topics.items():
+            rows = self.run(
+                f"{topic} envelope sample",
+                f"""SELECT TO_JSON($1) AS envelope
+                FROM @{LANDING}/landing/kafka/{_quote(topic)}/ (FILE_FORMAT => '{FILE_FORMAT}') LIMIT 1""",
+            )
+            info["sample"] = describe_envelope(json.loads(rows[0]["envelope"])) if rows else None
+        return topics
+
+    def generator_stage(self) -> list[dict]:
+        listed = self.run("list generator", f"LIST @{GENERATOR}") or []
+        return [{"name": r.get("name"), "size": r.get("size")} for r in sorted(listed, key=lambda r: r["name"])]
+
+    def udf_packages(self) -> dict[str, dict[str, list[str]]]:
+        names = ", ".join(f"'{p}'" for p in UDF_PACKAGES)
+        rows = (
+            self.run(
+                "udf packages",
+                f"""SELECT PACKAGE_NAME AS pkg_name, VERSION AS pkg_version, RUNTIME_VERSION AS python_runtime
+                FROM {DATABASE}.INFORMATION_SCHEMA.PACKAGES
+                WHERE LANGUAGE = 'python' AND PACKAGE_NAME IN ({names})""",
+            )
+            or []
+        )
+        found: dict[str, dict[str, set[str]]] = defaultdict(lambda: defaultdict(set))
+        for row in rows:
+            found[str(row["pkg_name"])][str(row.get("python_runtime") or "any")].add(str(row["pkg_version"]))
+        return {
+            package: {rt: sorted(v, key=_version_key)[-3:] for rt, v in sorted(found.get(package, {}).items())}
+            for package in UDF_PACKAGES
+        }
+
+    def inspect(self) -> dict:
+        result = {
+            "bronze_objects": self.bronze_objects(),
+            "connector_tables": self.connector_tables(),
+            "landing": self.landing(),
+            "generator_stage": self.generator_stage(),
+            "udf_packages": self.udf_packages(),
+        }
+        result["errors"] = self.errors
+        return result
 
 
 def inspect(cur) -> dict:
-    return {
-        "bronze_objects": bronze_objects(cur),
-        "connector_tables": connector_tables(cur),
-        "landing": landing(cur),
-        "generator_stage": generator_stage(cur),
-        "udf_packages": udf_packages(cur),
-    }
+    return Inspector(cur).inspect()
 
 
 def run() -> dict:
