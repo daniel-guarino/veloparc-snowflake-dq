@@ -28,6 +28,11 @@ models:
       +materialized: incremental
       +schema: SILVER
       +on_schema_change: append_new_columns
+    gold:
+      +materialized: table
+      +schema: GOLD
+      +grants:
+        select: [VLP_READER]
 
 data_tests:
   veloparc:
