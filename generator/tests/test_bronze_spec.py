@@ -6,7 +6,6 @@ import re
 import pytest
 
 from veloparc_gen.bronze import preview, spec
-from veloparc_gen.cli import MIGRATION_RAW_TABLES
 from veloparc_gen.config import DEFAULT_SCHEMA_DIR, REPO_ROOT
 
 # Functions COPY INTO transformations accept that the spec uses
@@ -151,9 +150,10 @@ def test_ddl_has_every_column_and_the_inserted_at_default():
     assert "'$id of the topic''s JSON Schema'" in ddl  # quotes escaped
 
 
-def test_committed_migration_matches_the_spec():
-    committed = (REPO_ROOT / MIGRATION_RAW_TABLES).read_text(encoding="utf-8")
-    assert committed == spec.raw_tables_migration(), "run `uv run veloparc-gen bronze-sql`"
+@pytest.mark.parametrize("relative", sorted(spec.GENERATED_FILES))
+def test_committed_generated_sql_matches_the_spec(relative):
+    committed = (REPO_ROOT / relative).read_text(encoding="utf-8")
+    assert committed == spec.GENERATED_FILES[relative](), "run `uv run veloparc-gen bronze-sql`"
     assert "{{" not in committed and "{%" not in committed  # schemachange renders Jinja
 
 
