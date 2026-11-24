@@ -5,8 +5,9 @@ Everything in Snowflake is created by versioned SQL, except a short bootstrap th
 ## One-time setup (maintainer)
 
 1. **Trial account:** Snowflake trial, **Enterprise** edition, cloud **AWS**, region **Europe (Paris) `eu-west-3`**.
-2. **Bootstrap:** in Snowsight, open a SQL worksheet and run [`bootstrap/000_bootstrap.sql`](bootstrap/000_bootstrap.sql)
-   with *Run All*. It creates the resource monitor, the `VLP_DEPLOYER` role, the `VLP_ADMIN` database, the
+2. **Bootstrap:** in Snowsight (Projects → Workspaces → My Workspace → + Add new → SQL File), paste
+   [`bootstrap/000_bootstrap.sql`](bootstrap/000_bootstrap.sql), select the role ACCOUNTADMIN and run the
+   statements **one at a time** (cursor on each, Ctrl+Enter): *Run All* in Workspaces did not run the whole script. It creates the resource monitor, the `VLP_DEPLOYER` role, the `VLP_ADMIN` database, the
    `WH_DEPLOY` warehouse and the service user `SVC_VELOPARC_CI`. Its **last statement** returns a
    `token_secret`, which is shown only once.
 3. **GitHub secrets** (Settings → Environments → `dev` → Environment secrets):
