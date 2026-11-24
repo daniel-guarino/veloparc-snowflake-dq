@@ -44,4 +44,4 @@ cloud session's environment would only help HTTPS APIs.
 - The trial has an end date. Snowflake (Phase 5) also runs on a 30-day trial: open it when the Kafka and S3 path
   works, so both trials overlap as much as possible.
 - GitHub Actions minutes are free for public repositories on standard runners. The full backfill takes about
-  4 minutes on 4 cores.
+  6 minutes.
