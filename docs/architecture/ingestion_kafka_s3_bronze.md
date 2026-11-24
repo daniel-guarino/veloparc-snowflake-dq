@@ -36,21 +36,64 @@ s3://vlp-dp-landing-prd/landing/kafka/<topic>/year=YYYY/month=MM/day=dd/hour=HH/
 - JSON lines gzip; SMTs HoistField (`payload`) + InsertField (`_kafka_topic/partition/offset/timestamp`) + headers → `_kafka_headers`.
 - Fontes mensais: pasta diária e `rotate.schedule.interval.ms` (at-least-once; dedup por offset na bronze).
 
-## Bronze: 25 colunas de metadados (inspiradas nos journal control fields do IBM CDC)
+## Bronze: 25 metadata columns (inspired by the IBM CDC journal control fields)
 
-- A · Journal da origem: `_OP_TYPE` (&ENTTYP), `_SOURCE_TS` (&TIMSTAMP), `_SOURCE_SYSTEM` (&SYSTEM/&JOB), `_SOURCE_USER` (&USER), `_SOURCE_TXN_ID` (&CCID), `_SOURCE_TXN_SEQ`, `_SOURCE_TXN_COUNT`, `_EVENT_ID`, `_ENTITY_TYPE`
-- B · Kafka: `_KAFKA_TOPIC`, `_KAFKA_PARTITION`, `_KAFKA_OFFSET` (&SEQNO), `_KAFKA_TS`, `_KAFKA_HEADERS`
-- C · Ficheiro: `_FILE_NAME`, `_FILE_ROW_NUMBER`, `_FILE_CONTENT_KEY`, `_FILE_LAST_MODIFIED` (METADATA$)
-- D · Carga e lineage: `_SCHEMA_ID`, `_SCHEMA_VERSION`, `_TRACE_ID`, `_LOAD_TS`, `_INSERTED_AT`
-- Mais `RAW_PAYLOAD VARIANT` e `BK_*` (chaves de negócio).
+> Section in English (project rule for docs); the rest of this file is older and in Portuguese. Decisions: ADR 0004.
 
-`_OP_TYPE`: I = PT, U = UP (só after-image), D = DL, R = RR.
+Eight `RAW_*` tables (no `RAW_DLQ` for now), append-only: the 25 columns below, `RAW_PAYLOAD VARIANT` and `BK_*`
+(business keys per topic). Both loaders fill the same columns: **file** = COPY from `@BRONZE.LANDING`
+(`$1` is the envelope, `h` = `$1:_kafka_headers`), **connector** = stream + task from `KAFKA_*`
+(`h` = `RECORD_METADATA:headers`).
 
-## Qualidade
+| # | Column | Type | File | Connector |
+| --- | --- | --- | --- | --- |
+| A1 | `_OP_TYPE` (&ENTTYP) | VARCHAR(1) | `h:vlp_op` | `h:vlp_op` |
+| A2 | `_SOURCE_TS` (&TIMSTAMP) | TIMESTAMP_TZ | payload field per topic (table above); `ce_time` for settlements, tariffs, GL | payload field per topic |
+| A3 | `_SOURCE_SYSTEM` (&SYSTEM) | VARCHAR | `h:ce_source` | `h:ce_source` |
+| A4 | `_SOURCE_USER` (&USER) | VARCHAR | `h:vlp_producer` | `h:vlp_producer` |
+| A5 | `_SOURCE_TXN_ID` (&CCID) | VARCHAR | `h:vlp_batch_id` | `h:vlp_batch_id` |
+| A6 | `_SOURCE_TXN_SEQ` | NUMBER | `h:vlp_batch_seq` (string) | `h:vlp_batch_seq` (integer) |
+| A7 | `_SOURCE_TXN_COUNT` | NUMBER | `h:vlp_batch_count` (string) | `h:vlp_batch_count` (integer) |
+| A8 | `_EVENT_ID` | VARCHAR | `h:ce_id` | `h:ce_id` |
+| A9 | `_EVENT_TYPE` | VARCHAR | `h:ce_type` | `h:ce_type` |
+| A10 | `_ENTITY_TYPE` | VARCHAR | `h:vlp_entity` | `h:vlp_entity` |
+| B1 | `_KAFKA_TOPIC` | VARCHAR | `$1:_kafka_topic` | `RECORD_METADATA:topic` |
+| B2 | `_KAFKA_PARTITION` | NUMBER | `$1:_kafka_partition` | `RECORD_METADATA:partition` |
+| B3 | `_KAFKA_OFFSET` (&SEQNO) | NUMBER | `$1:_kafka_offset` (simulated) | `RECORD_METADATA:offset` (broker) |
+| B4 | `_KAFKA_KEY` | VARCHAR | NULL (the envelope has no key) | `RECORD_METADATA:key` |
+| B5 | `_KAFKA_TS` | TIMESTAMP_TZ | `$1:_kafka_timestamp` (ms, simulated broker time) | `RECORD_METADATA:CreateTime` (ms, publish time) |
+| B6 | `_KAFKA_HEADERS` | OBJECT | `$1:_kafka_headers`, as delivered | `RECORD_METADATA:headers`, as delivered |
+| C1 | `_FILE_NAME` | VARCHAR | `METADATA$FILENAME` | NULL |
+| C2 | `_FILE_ROW_NUMBER` | NUMBER | `METADATA$FILE_ROW_NUMBER` | NULL |
+| C3 | `_FILE_CONTENT_KEY` | VARCHAR | `METADATA$FILE_CONTENT_KEY` | NULL |
+| C4 | `_FILE_LAST_MODIFIED` | TIMESTAMP_NTZ | `METADATA$FILE_LAST_MODIFIED` | NULL |
+| D1 | `_SCHEMA_ID` | VARCHAR | `$id` of the topic's JSON Schema | `$id` of the topic's JSON Schema |
+| D2 | `_SCHEMA_VERSION` | VARCHAR | `h:vlp_schema_version` | `h:vlp_schema_version` |
+| D3 | `_TRACE_ID` | VARCHAR | trace-id of `h:traceparent` | trace-id of `h:traceparent` |
+| D4 | `_LOAD_TS` | TIMESTAMP_TZ | `METADATA$START_SCAN_TIME` | `RECORD_METADATA:SnowflakeConnectorPushTime` |
+| D5 | `_INSERTED_AT` | TIMESTAMP_TZ | insert into `RAW_*` | insert into `RAW_*` |
 
-- Bronze append-only. Stream + Task com UDF `VALIDATE_JSON(_SCHEMA_ID, RAW_PAYLOAD)`; os inválidos vão para `BRONZE.DQ_QUARANTINE`.
-- Duplicado técnico (mesmo topic+partition+offset): fica o primeiro. Reenvio do produtor (mesmo ce_id): fica o primeiro. Duplicado de negócio (R4): mantém-se e é marcado como anomalia.
-- Completude do GL: COUNT(*) por `_SOURCE_TXN_ID` = `_SOURCE_TXN_COUNT`.
+`_OP_TYPE`: I = PT, U = UP (after-image only), D = DL, R = RR.
+
+**What the connector path delivers differently** (`snowflake-inspect`, 2026-11-24). The default Kafka Connect
+header converter parses some header strings: `ce_time` arrives as epoch milliseconds in a string
+(`"1793512844000"` instead of `2026-11-01T06:00:44.000Z`), `ce_specversion` as integer `1` instead of `"1.0"`,
+`vlp_batch_seq` / `vlp_batch_count` as integers. The bronze columns normalize this (numbers cast on both paths;
+`ce_time` read as epoch ms when all digits, ISO-8601 otherwise); `_KAFKA_HEADERS` keeps each path's object as is.
+
+**Kafka timestamp.** The Aiven Developer plan does not allow `message.timestamp.type=LogAppendTime` (neither per
+topic nor at service level), so broker messages carry **CreateTime**, set by the producer when the publish workflow
+sends them. In the files, `_kafka_timestamp` is the simulated broker time. Business time is always `_SOURCE_TS`.
+
+## Quality
+
+- Bronze append-only. Stream + triggered task with the Python UDF `BRONZE.VALIDATE_JSON(_SCHEMA_ID, RAW_PAYLOAD)`
+  (`jsonschema` 4.26.0); invalid rows go to `BRONZE.DQ_QUARANTINE`.
+- Duplicates are flagged in the `V_RAW_*` views and removed by the dbt `stg_` models (entry to silver): technical
+  duplicate (same topic + partition + offset + `ce_id`, the same message loaded twice) and producer resend (same
+  topic + `ce_id`, another offset); the first by `_INSERTED_AT` is kept. `ce_id` is in the technical key because
+  backfill offsets and broker offsets overlap. Business duplicate (R4): kept and flagged as an anomaly in silver.
+- GL completeness: per `_SOURCE_TXN_ID`, distinct `_SOURCE_TXN_SEQ` = `_SOURCE_TXN_COUNT`.
 
 ## Decisões em aberto
 
