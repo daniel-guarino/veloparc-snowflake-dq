@@ -68,9 +68,10 @@ def test_manifest_points_to_kafka_offsets(published):
 
 
 class FakeApi(AivenApi):
-    def __init__(self, existing_topics=(), acls=(), node_count=3):
+    def __init__(self, existing_topics=(), acls=(), node_count=3, plan="business-4"):
         self.calls = []
         self.node_count = node_count
+        self.plan = plan
         self._topics = {t: {"topic_name": t, "partitions": 2} for t in existing_topics}
         self._acls = list(acls)
         super().__init__("proj", "svc", transport=self._transport)
@@ -80,7 +81,7 @@ class FakeApi(AivenApi):
         if method == "GET" and url.endswith("/topic"):
             return {"topics": list(self._topics.values())}
         if method == "GET":
-            return {"service": {"node_count": self.node_count, "acl": self._acls}}
+            return {"service": {"plan": self.plan, "node_count": self.node_count, "acl": self._acls}}
         return {}
 
 
@@ -183,3 +184,39 @@ def test_plan_policy_accepts_text_values():
     kafka_setup.ensure_topics(api, small_config(), log=lambda *_: None)
     created = [b for m, path, b in api.calls if m == "POST" and path == "/topic"]
     assert len(created) == 5 and all(b["config"]["cleanup_policy"] == "delete" for b in created)
+
+
+def test_developer_plan_creates_topics_without_custom_config():
+    from veloparc_gen.aiven import AivenError
+
+    class DevTierApi(FakeApi):
+        def _transport(self, method, url, body):
+            if method == "POST" and url.endswith("/topic") and "config" in body:
+                raise AivenError("HTTP 400: kafka_policy_violation: unchecked configurations: message.timestamp.type")
+            if method == "PUT" and url.endswith("/service/svc"):
+                raise AivenError("HTTP 400: not allowed on this plan")
+            return super()._transport(method, url, body)
+
+    api = DevTierApi(existing_topics=["vlp.ops.tracking-event.v1"], node_count=2, plan="developer-2-3d")
+    lines = []
+    actions = kafka_setup.ensure_topics(api, small_config(), log=lines.append)
+    created = [b for m, path, b in api.calls if m == "POST" and path == "/topic"]
+    assert len(created) == 4 and all("config" not in b and b["replication"] == 1 for b in created)
+    assert actions["vlp.ops.tracking-event.v1"] == "exists (plan defaults)"
+    assert not [c for c in api.calls if c[0] == "PUT" and c[1].startswith("/topic")]
+    assert any("WARNING" in line and "LogAppendTime" in line for line in lines)  # refused, but not fatal
+
+
+def test_developer_plan_sets_log_append_time_at_service_level():
+    api = FakeApi(node_count=2, plan="developer-2-3d")
+    kafka_setup.ensure_topics(api, small_config(), log=lambda *_: None)
+    assert ("PUT", "", {"user_config": {"kafka": {"log_message_timestamp_type": "LogAppendTime"}}}) in api.calls
+
+
+def test_schema_registry_refusal_is_a_warning():
+    def refusing(method, path, body=None):
+        raise RuntimeError("HTTP 422: Invalid schema")
+
+    lines = []
+    versions = kafka_setup.register_schemas(small_config(), request=refusing, log=lines.append)
+    assert versions == {} and sum("WARNING" in line for line in lines) == 4
