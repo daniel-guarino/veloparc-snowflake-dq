@@ -173,5 +173,20 @@ def snowflake_check() -> None:
     typer.echo("OK")
 
 
+@app.command("connector-deploy")
+def connector_deploy() -> None:
+    """Rotate the connector key pair and create/update the Aiven Snowflake sink connector."""
+    from veloparc_gen import connector
+    from veloparc_gen.aiven import AivenError
+    from veloparc_gen.snowflake_conn import MissingSnowflakeSettings
+
+    try:
+        connector.run(log=typer.echo)
+    except (connector.ConnectorFailed, AivenError, MissingSnowflakeSettings) as exc:
+        typer.secho(str(exc), fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo("OK")
+
+
 if __name__ == "__main__":
     app()
