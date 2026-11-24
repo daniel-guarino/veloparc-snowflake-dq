@@ -82,3 +82,16 @@ class AivenApi:
     def add_acl(self, username: str, topic: str, permission: str) -> None:
         body = {"username": username, "topic": topic, "permission": permission}
         self._call("POST", f"{self.base}/acl", body)
+
+    # ---- Kafka Connect (call on the Kafka Connect service)
+    def connectors(self) -> list[dict]:
+        return list(self._call("GET", f"{self.base}/connectors", None).get("connectors", []))
+
+    def create_connector(self, config: dict) -> None:
+        self._call("POST", f"{self.base}/connectors", config)
+
+    def update_connector(self, name: str, config: dict) -> None:
+        self._call("PUT", f"{self.base}/connectors/{name}", config)
+
+    def connector_status(self, name: str) -> dict:
+        return self._call("GET", f"{self.base}/connectors/{name}/status", None).get("status", {})
