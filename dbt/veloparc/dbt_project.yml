@@ -8,6 +8,7 @@ profile: veloparc
 
 model-paths: ["models"]
 macro-paths: ["macros"]
+seed-paths: ["seeds"]
 test-paths: ["tests"]
 clean-targets: ["target", "dbt_packages", "logs"]
 
@@ -33,6 +34,15 @@ models:
       +schema: GOLD
       +grants:
         select: [VLP_READER]
+    dq:
+      +materialized: table
+      +schema: DQ
+      +grants:
+        select: [VLP_READER]
+
+seeds:
+  veloparc:
+    +schema: DQ
 
 data_tests:
   veloparc:

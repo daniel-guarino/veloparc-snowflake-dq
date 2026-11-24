@@ -1,0 +1,79 @@
+version: 2
+
+# Phase 9: one model per rule (one row per violation, standard columns from the dq_violation macro) and a
+# no_violations test on each, with meta {rule_id, dimension, owner}. All warnings: the generator injects anomalies,
+# so the rules are expected to find them; dq_issue and the scorecard measure them instead of stopping the pipeline.
+
+models:
+  - name: dq_rule_schema
+    description: Contract (JSON Schema) checks not enforced at load - enum, pattern, credit note if/then.
+    data_tests:
+      - no_violations:
+          config: {severity: warn, meta: {rule_id: SCHEMA, dimension: Validity, owner: Data platform}}
+  - name: dq_rule_r01
+    description: R1 - one TrackID per ShipmentUnit.
+    data_tests:
+      - no_violations:
+          config: {severity: warn, meta: {rule_id: R1, dimension: Completeness, owner: Shipping operations}}
+  - name: dq_rule_r02
+    description: R2 - TrackIDs and customers exist; invoiced parcels picked up; delivered parcels invoiced.
+    data_tests:
+      - no_violations:
+          config: {severity: warn, meta: {rule_id: R2, dimension: Consistency, owner: Billing operations}}
+  - name: dq_rule_r03
+    description: R3 - scan sequence grammar per parcel.
+    data_tests:
+      - no_violations:
+          config: {severity: warn, meta: {rule_id: R3, dimension: Consistency, owner: Network operations}}
+  - name: dq_rule_r04
+    description: R4 - no repeated (TrackID, status, GLN) scans.
+    data_tests:
+      - no_violations:
+          config: {severity: warn, meta: {rule_id: R4, dimension: Uniqueness, owner: Network operations}}
+  - name: dq_rule_r05
+    description: R5 - record time within 15 minutes of the scan; daily recording per country.
+    data_tests:
+      - no_violations:
+          config: {severity: warn, meta: {rule_id: R5, dimension: Timeliness, owner: Network operations}}
+  - name: dq_rule_r06
+    description: R6 - scan GLN is a depot; last DELIVERED scan in the consignee zone.
+    data_tests:
+      - no_violations:
+          config: {severity: warn, meta: {rule_id: R6, dimension: Consistency, owner: Network operations}}
+  - name: dq_rule_r07
+    description: R7 - invoice line and total arithmetic.
+    data_tests:
+      - no_violations:
+          config: {severity: warn, meta: {rule_id: R7, dimension: Accuracy, owner: Finance}}
+  - name: dq_rule_r08
+    description: R8 - price from the tariff band valid on the shipping date; FUEL surcharge.
+    data_tests:
+      - no_violations:
+          config: {severity: warn, meta: {rule_id: R8, dimension: Accuracy, owner: Finance}}
+  - name: dq_rule_r09
+    description: R9 - credit notes negative and linked to an existing invoice.
+    data_tests:
+      - no_violations:
+          config: {severity: warn, meta: {rule_id: R9, dimension: Accuracy, owner: Finance}}
+  - name: dq_rule_r13
+    description: R13 - ledger revenue vs invoice revenue per country and month (0.5%).
+    data_tests:
+      - no_violations:
+          config: {severity: warn, meta: {rule_id: R13, dimension: Accuracy, owner: Finance}}
+  - name: dq_issue
+    description: One row per violation of any rule, with dimension, severity, owner and bronze lineage.
+    columns:
+      - name: issue_id
+        data_tests:
+          - not_null
+          - unique:
+              config: {severity: warn}
+      - name: rule_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments: {to: ref('dq_rule_catalog'), field: rule_id}
+
+seeds:
+  - name: dq_rule_catalog
+    description: DQ rule catalog - rule, description, sources, dimension, severity, owner, acceptable threshold (%).
