@@ -56,3 +56,9 @@ def test_every_zone_has_one_partner_and_a_depot(clean_world):
     for zone in clean_world.zones("PT"):
         assert zone in clean_world.zone_partner
         assert clean_world.depots_in("PT", zone, ("DEPOT",))
+
+
+def test_parallel_schema_gate_matches_serial(clean_world):
+    serial = validate_world(clean_world, workers=1)
+    parallel = validate_world(clean_world, workers=2)
+    assert parallel.checked == serial.checked
