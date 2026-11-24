@@ -10,3 +10,10 @@ R7,netAmount = basePrice + surcharges; totals.net = sum of lines; gross = net + 
 R8,basePrice = band price of the tariff valid on the shipping date; FUEL = basePrice x fuelSurchargePct / 100,invoice; tariff; veloship_shipment,Accuracy,warn,Finance,99.9
 R9,Credit notes are negative and reference an existing invoice,invoice,Accuracy,warn,Finance,100.0
 R13,Ledger revenue per country and month = invoice revenue in EUR (0.5%),gl_extract; invoice,Accuracy,warn,Finance,100.0
+R10,fxRateToEur = 1 in EUR; otherwise the rate of the issue date (REF.FX_RATE_DAILY),invoice,Accuracy,warn,Finance,100.0
+R11,deliveredParcels = DELIVERED scans of the partner zone and month,partner_settlement; tracking_event,Accuracy,warn,Partner management,100.0
+R12,totalCost = stops x costPerStop; stops <= deliveredParcels,partner_settlement,Accuracy,warn,Partner management,100.0
+R14,Weight bands start at 0 and are contiguous with increasing prices; no overlapping validity per customer product and zone,tariff,Consistency,warn,Pricing,100.0
+R15,Valid GS1 check digit in GLN and SSCC; vatNumber prefix = countryCode,master_data; veloship_shipment; tracking_event,Validity,warn,Master data,99.9
+R16,Each zone has exactly one partner,master_data,Uniqueness,warn,Partner management,100.0
+LEAD_COUNTRY_ISO2,Lead country is an ISO 3166-1 alpha-2 code (silver normalises it but the source is flagged),crm_object,Validity,warn,Sales operations,99.0

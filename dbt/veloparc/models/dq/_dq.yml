@@ -60,6 +60,41 @@ models:
     data_tests:
       - no_violations:
           config: {severity: warn, meta: {rule_id: R13, dimension: Accuracy, owner: Finance}}
+  - name: dq_rule_r10
+    description: R10 - fxRateToEur is 1 in EUR, otherwise the REF.FX_RATE_DAILY rate of the issue date.
+    data_tests:
+      - no_violations:
+          config: {severity: warn, meta: {rule_id: R10, dimension: Accuracy, owner: Finance}}
+  - name: dq_rule_r11
+    description: R11 - deliveredParcels = DELIVERED scans in the partner zone and month.
+    data_tests:
+      - no_violations:
+          config: {severity: warn, meta: {rule_id: R11, dimension: Accuracy, owner: Partner management}}
+  - name: dq_rule_r12
+    description: R12 - totalCost = stops x costPerStop; stops <= deliveredParcels.
+    data_tests:
+      - no_violations:
+          config: {severity: warn, meta: {rule_id: R12, dimension: Accuracy, owner: Partner management}}
+  - name: dq_rule_r14
+    description: R14 - weight bands from 0, contiguous, increasing prices; no overlapping tariff validity.
+    data_tests:
+      - no_violations:
+          config: {severity: warn, meta: {rule_id: R14, dimension: Consistency, owner: Pricing}}
+  - name: dq_rule_r15
+    description: R15 - GS1 check digits (SSCC, depot, partner base depot and scan GLNs); VAT prefix = country.
+    data_tests:
+      - no_violations:
+          config: {severity: warn, meta: {rule_id: R15, dimension: Validity, owner: Master data}}
+  - name: dq_rule_r16
+    description: R16 - each zone has exactly one partner.
+    data_tests:
+      - no_violations:
+          config: {severity: warn, meta: {rule_id: R16, dimension: Uniqueness, owner: Partner management}}
+  - name: dq_rule_lead_country_iso2
+    description: CRM lead country is not an ISO 3166-1 alpha-2 code in the source (silver normalises it).
+    data_tests:
+      - no_violations:
+          config: {severity: warn, meta: {rule_id: LEAD_COUNTRY_ISO2, dimension: Validity, owner: Sales operations}}
   - name: dq_issue
     description: One row per violation of any rule, with dimension, severity, owner and bronze lineage.
     columns:
@@ -73,6 +108,71 @@ models:
           - not_null
           - relationships:
               arguments: {to: ref('dq_rule_catalog'), field: rule_id}
+  - name: dq_scorecard_daily
+    description: >
+      Daily DQ scorecard per data product, source, country and dimension - records evaluated, records with an issue,
+      pct_valid and status (green at or above the catalog threshold, amber within 1 point, red below).
+    data_tests:
+      - unique_combination:
+          arguments: {columns: [source, country_code, day, dimension]}
+    columns:
+      - name: data_product
+        description: Data product the source feeds (Parcel operations, Revenue and billing, Partner costs, Customer pricing, Sales pipeline).
+        data_tests: [not_null]
+      - name: source
+        description: Source (topic) of the records evaluated.
+      - name: country_code
+        description: Country of the records (consignee, issuing company, zone or customer country).
+      - name: day
+        description: Business date of the records (scan, shipping, issue date; first day of the month for monthly sources).
+      - name: dimension
+        description: DQ dimension (Validity, Completeness, Consistency, Uniqueness, Timeliness, Accuracy).
+      - name: records_evaluated
+        description: Silver records of the source, country and day.
+      - name: records_with_issue
+        description: Distinct business keys with at least one issue of that dimension (capped at records_evaluated).
+      - name: pct_valid
+        description: 100 x (1 - records_with_issue / records_evaluated).
+      - name: threshold_pct
+        description: Acceptable pct_valid of the dimension (lowest threshold of its rules in the catalog).
+      - name: status
+        description: green, amber or red.
+        data_tests:
+          - accepted_values:
+              arguments: {values: [green, amber, red]}
+  - name: dq_detection_eval
+    description: >
+      Per rule, the detections of the latest backfill run compared with the generator's answer key (injected
+      anomalies) and with the generator's own rule checker - found, missed, extra, precision and recall.
+    columns:
+      - name: rule_id
+        data_tests: [unique, not_null]
+      - name: dimension
+      - name: owner
+      - name: detected
+        description: Distinct business keys flagged by the rule within the backfill window.
+      - name: injected
+        description: Anomalies injected for the rule (ANOMALY_GROUND_TRUTH, latest backfill run).
+      - name: injected_found
+        description: Injected anomalies matched by at least one detection.
+      - name: injected_missed
+        description: Injected anomalies with no detection (false negatives).
+      - name: detected_not_injected
+        description: Detections with no injected anomaly - natural violations or false positives.
+      - name: precision_vs_injected
+        description: Share of detections that match an injected anomaly.
+      - name: recall_vs_injected
+        description: Share of injected anomalies detected.
+      - name: checker_violations
+        description: Violations found by the generator's checker (GENERATOR_RULE_VIOLATIONS), natural ones included.
+      - name: checker_found
+        description: Checker violations matched by a detection.
+      - name: detected_not_in_checker
+        description: Detections the checker did not report.
+      - name: precision_vs_checker
+        description: Share of detections the checker also reports.
+      - name: recall_vs_checker
+        description: Share of checker violations detected.
 
 seeds:
   - name: dq_rule_catalog
