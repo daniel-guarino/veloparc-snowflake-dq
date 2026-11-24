@@ -29,6 +29,8 @@ The token expires after 90 days. To rotate it, see the comment at the end of the
 | `V1.4.0__bronze_raw_tables.sql` | The 8 bronze `RAW_*` tables (25 metadata columns, `RAW_PAYLOAD`, `BK_*`) and their grants. **Generated** by `veloparc-gen bronze-sql` from `generator/src/veloparc_gen/bronze/spec.py`; a test fails if it is stale (ADR 0004) |
 | `V1.5.0__bronze_load_audit.sql` | `BRONZE.LOAD_AUDIT`: one row per topic per run of the file loader (`bronze-load` workflow) |
 | `R__bronze_connector_tasks.sql` | **Generated**, repeatable. Change tracking on the `KAFKA_*` tables, an append-only stream per table (created once, `SHOW_INITIAL_ROWS`) and a triggered task on `WH_LOAD` that inserts the new connector rows into the `RAW_*` table |
+| `V1.6.0__ref_and_generator_manifests.sql` | `REF.FX_RATE_DAILY`, `REF.POSTAL_ZONE`, `REF.COUNTRY_ALIAS`; `DQ.GENERATOR_RUNS`, `DQ.ANOMALY_GROUND_TRUTH`, `DQ.GENERATOR_RULE_VIOLATIONS`; file formats for the generator stage |
+| `R__bronze_views.sql` | **Generated**, repeatable. `V_RAW_*` (every row plus `_IS_TECH_DUP` and `_IS_RESEND`) and `V_GL_BATCH_COMPLETENESS`: the sources dbt reads |
 
 The migrations are applied with [schemachange](https://github.com/Snowflake-Labs/schemachange); the history is in
 `VLP_ADMIN.SCHEMACHANGE.CHANGE_HISTORY`. Add a change as a new `V<x.y.z>__<description>.sql` file, never by
@@ -38,5 +40,5 @@ Before applying a bronze migration, run *Actions → bronze-preview* (read-only)
 a sample of the landing files and connector tables and shows, per column, how many values come out non-NULL.
 
 Loading bronze: *Actions → bronze-load* runs `COPY INTO` for every topic from `@BRONZE.LANDING` (files already
-loaded are skipped, so it can be re-run) and ends with the status of both paths; `veloparc-gen bronze-status` shows
+loaded are skipped, so it can be re-run), replaces the `REF` tables and appends new generator manifests to `DQ` and ends with the status of both paths; `veloparc-gen bronze-status` shows
 the same status read-only. The connector path needs no workflow: its triggered tasks run when the streams have rows.

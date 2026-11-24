@@ -1,4 +1,4 @@
-# ADR 0004 · Bronze: two loaders over the existing data, dedup flags, validation in Snowflake
+# ADR 0004 · Bronze: two loaders over the existing data, dedup flags, validation in dbt
 
 - Status: accepted
 - Date: 2026-11-24
@@ -15,8 +15,6 @@ Phase 6 builds bronze on what is already in Snowflake (`snowflake-inspect`, run 
   `KAFKA_INVOICES` (0), written by the connector (Snowpipe Streaming), owned by `VLP_CONNECTOR`, change tracking off.
 - `@BRONZE.GENERATOR`: one backfill run (`run_manifest.json`, `anomaly_manifest.jsonl`, `rule_violations.jsonl`),
   the 3 reference tables as CSV, `state/offsets.json`.
-- Python UDF packages: `jsonschema` 4.26.0 (the version pinned in `pyproject.toml`) and `rfc3339-validator` exist for
-  runtime 3.12.
 
 There will be **no new ingestion of files and no change to the connector**: bronze maps the data as it is.
 
@@ -57,12 +55,12 @@ LogAppendTime), not the simulated broker time that `_kafka_timestamp` carries in
    `_INSERTED_AT` is kept. `ce_id` is part of the technical key because backfill and broker offsets overlap. The dbt
    `stg_` models filter on both flags, so silver has no technical duplicates; business duplicates (R4) are kept and
    flagged in silver.
-6. **Schema validation runs in Snowflake**: a Python UDF `BRONZE.VALIDATE_JSON(schema_id, payload)` with
-   `jsonschema` 4.26.0 (runtime 3.12) and the 8 schemas of `contracts/schemas/` embedded at deploy time, applied by a
-   triggered task on an append-only stream per `RAW_*` table; invalid rows go to `BRONZE.DQ_QUARANTINE`. The
-   handler is a Python file in the repository, tested with pytest against the same examples and anomalies as the
-   generator.
-7. **GL batch completeness** is a view: per `_SOURCE_TXN_ID`, distinct `_SOURCE_TXN_SEQ` = `_SOURCE_TXN_COUNT`.
+6. **Schema validation runs in dbt**, not in bronze (revised 2026-11-24, as the minimum path of the plan already
+   proposed): the `stg_` models check the contract rules (required fields, types, enums, formats) and Phase 9 turns
+   them into dbt tests with stored failures. Bronze keeps every row; there is no Python UDF, quarantine table or
+   validation task. Rows that break a schema reach silver flagged, not dropped, and the DQ models count them.
+7. **GL batch completeness** is a view, `BRONZE.V_GL_BATCH_COMPLETENESS`: per `_SOURCE_TXN_ID`, distinct
+   `_SOURCE_TXN_SEQ` = `_SOURCE_TXN_COUNT`.
 8. **Reference tables stay CSV** (as the generator writes them) and are loaded by COPY into
    `REF.FX_RATE_DAILY`, `REF.POSTAL_ZONE`, `REF.COUNTRY_ALIAS`; dbt reads them as sources instead of seeds.
    **Generator manifests** are loaded into `DQ.GENERATOR_RUNS`, `DQ.ANOMALY_GROUND_TRUTH` and
@@ -76,5 +74,6 @@ LogAppendTime), not the simulated broker time that `_kafka_timestamp` carries in
 - Known gaps in the existing data, accepted: the file-based topics of 2026-11-01 are not on the stage, and the
   manifests of the 2026-11-01 publish were not uploaded, so the answer key covers the backfill only.
 - Tasks only wake `WH_LOAD` when a stream has data; with no new publishes they cost nothing after the first run.
+- Sessions (workflows) and tasks run with `TIMEZONE = 'UTC'`, so `CURRENT_TIMESTAMP()` defaults are stored in UTC.
 - If the connector is redeployed one day with `header.converter=StringConverter`, new rows get string headers; the
   normalization in decision 2 already handles both forms.

@@ -34,7 +34,10 @@ def connection_args(env: dict[str, str] | None = None) -> dict[str, str]:
 def connect(env: dict[str, str] | None = None):
     import snowflake.connector
 
-    return snowflake.connector.connect(**connection_args(env), application="veloparc-gen", login_timeout=30)
+    # UTC sessions: CURRENT_TIMESTAMP() defaults (_INSERTED_AT, _LOADED_AT) and displayed timestamps in UTC.
+    return snowflake.connector.connect(
+        **connection_args(env), application="veloparc-gen", login_timeout=30, session_parameters={"TIMEZONE": "UTC"}
+    )
 
 
 def check() -> dict:

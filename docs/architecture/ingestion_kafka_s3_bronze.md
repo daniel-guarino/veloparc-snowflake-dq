@@ -87,13 +87,14 @@ sends them. In the files, `_kafka_timestamp` is the simulated broker time. Busin
 
 ## Quality
 
-- Bronze append-only. Stream + triggered task with the Python UDF `BRONZE.VALIDATE_JSON(_SCHEMA_ID, RAW_PAYLOAD)`
-  (`jsonschema` 4.26.0); invalid rows go to `BRONZE.DQ_QUARANTINE`.
+- Bronze append-only, no validation at load: the JSON Schema rules are checked in dbt (`stg_` models and Phase 9
+  tests); rows that break them are flagged in silver, never dropped (ADR 0004, decision 6).
 - Duplicates are flagged in the `V_RAW_*` views and removed by the dbt `stg_` models (entry to silver): technical
   duplicate (same topic + partition + offset + `ce_id`, the same message loaded twice) and producer resend (same
   topic + `ce_id`, another offset); the first by `_INSERTED_AT` is kept. `ce_id` is in the technical key because
   backfill offsets and broker offsets overlap. Business duplicate (R4): kept and flagged as an anomaly in silver.
-- GL completeness: per `_SOURCE_TXN_ID`, distinct `_SOURCE_TXN_SEQ` = `_SOURCE_TXN_COUNT`.
+- GL completeness: view `BRONZE.V_GL_BATCH_COMPLETENESS`, per `_SOURCE_TXN_ID`, distinct `_SOURCE_TXN_SEQ` =
+  `_SOURCE_TXN_COUNT`.
 
 ## Decisões em aberto
 
