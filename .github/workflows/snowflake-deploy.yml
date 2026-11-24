@@ -1,0 +1,61 @@
+# Manual: apply infra/snowflake/migrations with schemachange, as SVC_VELOPARC_CI (PAT) with role VLP_DEPLOYER.
+# Requires the one-time bootstrap (infra/snowflake/bootstrap/000_bootstrap.sql) and the Environment dev secrets
+# SNOWFLAKE_ACCOUNT and SNOWFLAKE_PAT.
+name: snowflake-deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Show what would run, change nothing
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: snowflake-deploy
+  cancel-in-progress: false
+
+env:
+  SCHEMACHANGE_VERSION: "4.4.0"
+
+jobs:
+  deploy:
+    name: schemachange
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: dev
+    env:
+      SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+      SNOWFLAKE_PAT: ${{ secrets.SNOWFLAKE_PAT }}
+      SNOWFLAKE_USER: ${{ vars.SNOWFLAKE_USER || 'SVC_VELOPARC_CI' }}
+      SNOWFLAKE_ROLE: VLP_DEPLOYER
+      SNOWFLAKE_WAREHOUSE: WH_DEPLOY
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - uses: astral-sh/setup-uv@v10.4.0
+        with:
+          enable-cache: true
+
+      - name: Install pinned dependencies
+        run: uv sync --frozen --no-dev
+
+      - name: Check connection
+        run: uv run --no-dev veloparc-gen snowflake-check
+
+      - name: Apply migrations
+        env:
+          SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PAT }}
+          DRY_RUN: ${{ inputs.dry_run && '--schemachange-dry-run' || '' }}
+        run: |
+          uvx --from "schemachange==${SCHEMACHANGE_VERSION}" schemachange deploy \
+            --schemachange-root-folder infra/snowflake/migrations \
+            --schemachange-change-history-table VLP_ADMIN.SCHEMACHANGE.CHANGE_HISTORY \
+            --schemachange-create-change-history-table \
+            --schemachange-query-tag veloparc-deploy $DRY_RUN
+
+      - name: Check result
+        run: uv run --no-dev veloparc-gen snowflake-check
