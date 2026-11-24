@@ -1,0 +1,19 @@
+version: 2
+
+models:
+  - name: stg_master_data
+    description: Master data messages (customer, depot, partner) without technical duplicates or resends.
+    columns:
+      - name: entity
+        data_tests:
+          - accepted_values:
+              arguments: {values: [customer, depot, partner]}
+  - name: stg_tariffs
+    description: Tariff messages without technical duplicates or resends; weight bands as an array.
+  - name: stg_crm_objects
+    description: CRM lead and opportunity messages without technical duplicates or resends.
+    columns:
+      - name: object_type
+        data_tests:
+          - accepted_values:
+              arguments: {values: [Lead, Opportunity]}
