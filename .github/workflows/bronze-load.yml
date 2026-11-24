@@ -1,0 +1,56 @@
+# Manual: load the landing files already in @BRONZE.LANDING into the RAW_* tables with COPY INTO (ADR 0004).
+# COPY skips files it has already loaded, so re-running is safe. Each run writes one row per topic to
+# BRONZE.LOAD_AUDIT and ends with the bronze status (rows per path, connector tasks, pending stream rows).
+# Requires the migrations V1.4.0 and V1.5.0 (snowflake-deploy). Fails if any row or file could not be loaded.
+name: bronze-load
+
+on:
+  workflow_dispatch:
+    inputs:
+      topics:
+        description: Comma-separated topic keys from topics.yaml (e.g. tracking_event,invoice), or all
+        type: string
+        default: all
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bronze-load
+  cancel-in-progress: false
+
+jobs:
+  load:
+    name: COPY landing files into bronze
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: dev
+    env:
+      SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+      SNOWFLAKE_PAT: ${{ secrets.SNOWFLAKE_PAT }}
+      SNOWFLAKE_USER: ${{ vars.SNOWFLAKE_USER || 'SVC_VELOPARC_CI' }}
+      SNOWFLAKE_ROLE: VLP_DEPLOYER
+      SNOWFLAKE_WAREHOUSE: WH_LOAD
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - uses: astral-sh/setup-uv@v10.4.0
+        with:
+          enable-cache: true
+
+      - name: Install pinned dependencies
+        run: uv sync --frozen --no-dev
+
+      - name: Load
+        shell: bash  # bash -eo pipefail: a failure of the command is not hidden by tee
+        env:
+          TOPICS: ${{ inputs.topics }}
+        run: uv run --no-dev veloparc-gen bronze-load --topics "$TOPICS" | tee bronze-load.txt
+
+      - name: Keep the result
+        if: always()
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: bronze-load
+          path: bronze-load.txt
+          retention-days: 30

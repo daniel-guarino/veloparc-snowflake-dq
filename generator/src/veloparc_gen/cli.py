@@ -193,27 +193,28 @@ def snowflake_inspect() -> None:
     typer.echo("OK")
 
 
-MIGRATION_RAW_TABLES = Path("infra/snowflake/migrations/V1.4.0__bronze_raw_tables.sql")
-
-
 @app.command("bronze-sql")
 def bronze_sql(
-    check: Annotated[bool, typer.Option(help="Fail if the committed migration differs from the spec")] = False,
+    check: Annotated[bool, typer.Option(help="Fail if a committed file differs from the spec")] = False,
 ) -> None:
-    """Generate the bronze RAW_* migration from the column spec (or check that it is up to date)."""
+    """Generate the bronze SQL (RAW_* migration, connector tasks) from the column spec, or check it is up to date."""
     from veloparc_gen.bronze import spec
     from veloparc_gen.config import REPO_ROOT
 
-    target = REPO_ROOT / MIGRATION_RAW_TABLES
-    generated = spec.raw_tables_migration()
+    stale = []
+    for relative, render in spec.GENERATED_FILES.items():
+        target, generated = REPO_ROOT / relative, render()
+        if check:
+            if not target.exists() or target.read_text(encoding="utf-8") != generated:
+                stale.append(relative)
+            continue
+        target.write_text(generated, encoding="utf-8")
+        typer.echo(f"wrote {relative}")
+    if stale:
+        typer.secho(f"stale: {', '.join(stale)}; run `veloparc-gen bronze-sql`", fg="red", err=True)
+        raise typer.Exit(code=1)
     if check:
-        if not target.exists() or target.read_text(encoding="utf-8") != generated:
-            typer.secho(f"{MIGRATION_RAW_TABLES} is stale: run `veloparc-gen bronze-sql`", fg="red", err=True)
-            raise typer.Exit(code=1)
-        typer.echo(f"{MIGRATION_RAW_TABLES} is up to date")
-        return
-    target.write_text(generated, encoding="utf-8")
-    typer.echo(f"wrote {MIGRATION_RAW_TABLES}")
+        typer.echo("generated bronze SQL is up to date")
 
 
 @app.command("bronze-preview")
@@ -236,6 +237,41 @@ def bronze_preview(
         typer.secho(f'{len(result["errors"])} statement(s) failed, see "errors"', fg=typer.colors.RED, err=True)
         raise typer.Exit(code=1)
     typer.echo("OK")
+
+
+@app.command("bronze-load")
+def bronze_load(
+    topics: Annotated[str, typer.Option(help="Comma-separated topic keys (topics.yaml), or 'all'")] = "all",
+) -> None:
+    """COPY the landing files into the RAW_* tables (skips files already loaded), audit it, then show status."""
+    import json
+
+    from veloparc_gen.bronze import load
+    from veloparc_gen.snowflake_conn import MissingSnowflakeSettings
+
+    names = None if topics.strip() in ("", "all") else [t.strip() for t in topics.split(",") if t.strip()]
+    try:
+        result = load.run(names, log=typer.echo)
+    except (MissingSnowflakeSettings, ValueError) as exc:
+        typer.secho(str(exc), fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(json.dumps(result, indent=2, default=str))
+    issues = load.problems(result)
+    if issues:
+        for issue in issues:
+            typer.secho(issue, fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1)
+    typer.echo("OK")
+
+
+@app.command("bronze-status")
+def bronze_status() -> None:
+    """Read-only: rows per RAW_* table by path, connector tasks' state, pending stream rows."""
+    import json
+
+    from veloparc_gen.bronze import load
+
+    typer.echo(json.dumps(load.run_status(), indent=2, default=str))
 
 
 @app.command("connector-deploy")

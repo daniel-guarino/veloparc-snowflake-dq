@@ -1,0 +1,24 @@
+-- One row per topic per run of the file loader (`veloparc-gen bronze-load`, ADR 0004): what COPY INTO did.
+-- Per-file detail stays in Snowflake's own COPY_HISTORY; this table ties each load to its GitHub run.
+CREATE TABLE IF NOT EXISTS VLP_DP.BRONZE.LOAD_AUDIT (
+    LOAD_ID VARCHAR COMMENT 'One id per bronze-load run',
+    LOADER VARCHAR COMMENT 'copy (files from @LANDING)',
+    TARGET_TABLE VARCHAR,
+    KAFKA_TOPIC VARCHAR,
+    QUERY_ID VARCHAR COMMENT 'Snowflake query id of the COPY',
+    STARTED_AT TIMESTAMP_TZ,
+    FINISHED_AT TIMESTAMP_TZ DEFAULT CURRENT_TIMESTAMP(),
+    FILES_LOADED NUMBER(38,0),
+    FILES_PARTIALLY_LOADED NUMBER(38,0),
+    FILES_FAILED NUMBER(38,0),
+    ROWS_PARSED NUMBER(38,0),
+    ROWS_LOADED NUMBER(38,0),
+    ERRORS_SEEN NUMBER(38,0),
+    FIRST_ERROR VARCHAR,
+    FIRST_ERROR_FILE VARCHAR,
+    GITHUB_RUN VARCHAR COMMENT 'GitHub Actions run id and commit'
+)
+COMMENT = 'File loader audit: one row per topic per bronze-load run (ADR 0004)';
+
+GRANT SELECT, INSERT ON TABLE VLP_DP.BRONZE.LOAD_AUDIT TO ROLE VLP_LOADER;
+GRANT SELECT ON TABLE VLP_DP.BRONZE.LOAD_AUDIT TO ROLE VLP_TRANSFORMER;
