@@ -66,8 +66,81 @@ models:
         data_tests:
           - relationships:
               arguments: {to: ref('dim_date'), field: date_key}
+      - name: track_id
+        data_tests:
+          - relationships:
+              arguments: {to: ref('fct_parcel'), field: track_id}
 
   - name: fct_gl_revenue
     data_tests:
       - unique_combination:
           arguments: {columns: [company_code, period, gl_account]}
+
+  - name: fct_parcel
+    description: One row per parcel; is_inferred for track IDs seen only in events or invoices (R2).
+    columns:
+      - name: track_id
+        data_tests: [unique, not_null]
+      - name: customer_sk
+        data_tests:
+          - not_null
+          - relationships:
+              arguments: {to: ref('dim_customer'), field: customer_sk}
+      - name: partner_zone_sk
+        data_tests:
+          - relationships:
+              arguments: {to: ref('dim_partner_zone'), field: partner_zone_sk}
+      - name: shipping_date_key
+        data_tests:
+          - relationships:
+              arguments: {to: ref('dim_date'), field: date_key}
+
+  - name: fct_parcel_event
+    description: One row per scan; is_duplicate marks repeated (track_id, status, GLN) scans (R4).
+    columns:
+      - name: event_id
+        data_tests: [unique, not_null]
+      - name: track_id
+        data_tests:
+          - relationships:
+              arguments: {to: ref('fct_parcel'), field: track_id}
+      - name: depot_gln
+        data_tests:
+          - relationships:
+              arguments: {to: ref('dim_depot'), field: depot_gln}
+      - name: event_date_key
+        data_tests:
+          - relationships:
+              arguments: {to: ref('dim_date'), field: date_key}
+
+  - name: fct_partner_cost
+    columns:
+      - name: settlement_id
+        data_tests: [unique, not_null]
+      - name: partner_zone_sk
+        data_tests:
+          - relationships:
+              arguments: {to: ref('dim_partner_zone'), field: partner_zone_sk}
+      - name: total_cost_eur
+        data_tests:
+          - not_null:
+              config: {severity: warn}
+
+  - name: fct_opportunity
+    columns:
+      - name: opportunity_id
+        data_tests: [unique, not_null]
+      - name: customer_sk
+        data_tests:
+          - relationships:
+              arguments: {to: ref('dim_customer'), field: customer_sk}
+
+  - name: fct_lead
+    columns:
+      - name: lead_id
+        data_tests: [unique, not_null]
+      - name: converted_opportunity_id
+        data_tests:
+          - relationships:
+              arguments: {to: ref('fct_opportunity'), field: opportunity_id}
+              config: {severity: warn}
