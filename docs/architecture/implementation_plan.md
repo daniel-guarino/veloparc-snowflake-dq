@@ -215,8 +215,10 @@ It is built on the data already in Snowflake (no new ingestion, connector unchan
 1. **Inspect first** (`snowflake-inspect` workflow, read-only): connector tables, header types, landing envelopes,
    generator stage, UDF packages. Done on 2026-11-24; its findings are in ADR 0004.
 2. **One column spec** (Python) generates the DDL of the 8 tables and the SELECT of both loaders, so the 25 columns
-   are identical everywhere; the generated SQL is committed and CI fails if it is stale. Clustering on
-   `TO_DATE(_KAFKA_TS)` only on shipments and tracking events.
+   are identical everywhere; the generated SQL is committed and CI fails if it is stale. No clustering keys yet:
+   the tables are small (largest: tracking events, about 140 MB of gzip JSON) and automatic clustering is billed
+   as serverless compute; add `CLUSTER BY (TO_DATE(_KAFKA_TS))` on shipments and tracking events if volumes grow.
+   `bronze-preview` (read-only) runs both SELECTs on real data before the migration is applied.
 3. **Migrations** (schemachange): `RAW_*`, `DQ_QUARANTINE`, `LOAD_AUDIT`, `REF` and `DQ` ground-truth tables, grants;
    repeatable `R__` scripts for the UDF, views, streams and tasks.
 4. **File loader:** `veloparc-gen bronze-load` (workflow `bronze-load`) runs one `COPY INTO` per topic with
