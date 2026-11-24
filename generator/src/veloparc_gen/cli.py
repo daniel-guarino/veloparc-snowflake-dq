@@ -155,5 +155,23 @@ def kafka_check() -> None:
     )
 
 
+@app.command("snowflake-check")
+def snowflake_check() -> None:
+    """Connect to Snowflake as the CI service user and show region, role and Veloparc objects."""
+    import json
+
+    from veloparc_gen.snowflake_conn import MissingSnowflakeSettings, check
+
+    try:
+        result = check()
+    except MissingSnowflakeSettings as exc:
+        typer.secho(str(exc), fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(json.dumps(result, indent=2))
+    if result["region"] and "EU_WEST_3" not in str(result["region"]).upper():
+        typer.secho(f"WARNING: account region {result['region']} is not AWS eu-west-3 (Paris)", fg="yellow")
+    typer.echo("OK")
+
+
 if __name__ == "__main__":
     app()
