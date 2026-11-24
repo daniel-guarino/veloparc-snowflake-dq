@@ -1,25 +1,58 @@
 # veloparc-snowflake-dq
 
-Data quality platform for the Sales & Finance data products of **Veloparc**, a fictitious European parcel carrier: 8 sources, Kafka → S3 → Snowflake → dbt, with every data quality rule measured against an answer key of injected anomalies.
+Data quality platform for the Sales & Finance data products of **Veloparc**, a fictitious European parcel carrier.
+A Python generator plays 8 source systems. Their data flows through Kafka (Aiven) and Snowflake stages into a bronze
+layer, and dbt, running inside Snowflake, builds silver, a gold star schema and data quality models. Every DQ rule is
+then measured against an **answer key** of anomalies the generator injected on purpose (precision and recall per rule).
 
-> Work in progress. All company names and data in this repository are fictitious.
+> All company names and data in this repository are fictitious.
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-  G[Python generator] -->|continuous sources| K[(Kafka · Aiven)]
-  G -->|backfill + batch sources| S3
-  K --> C[Kafka Connect S3 sink]
-  C --> S3[(S3 landing)]
-  S3 -->|Snowpipe| B[Bronze · RAW_* + 25 metadata cols]
-  B --> Q[DQ_QUARANTINE]
-  B -->|dbt| SV[Silver]
+  G[Python generator] -->|shipments, scans, invoices, CRM| K[(Kafka · Aiven)]
+  K -->|Snowflake sink connector · Snowpipe Streaming| KT[KAFKA_* tables]
+  G -->|backfill + file sources · GitHub Actions| ST[(Internal stage @BRONZE.LANDING)]
+  G -->|answer key + reference CSVs| GS[(@BRONZE.GENERATOR)]
+  KT -->|stream + triggered task| B[Bronze · 8 RAW_* tables · 25 metadata columns]
+  ST -->|COPY INTO| B
+  GS -->|COPY INTO| REF[REF · DQ.ANOMALY_GROUND_TRUTH]
+  B -->|dbt stg_ · dedup| SV[Silver · incremental]
   SV -->|dbt| GD[Gold · star schema]
-  SV --> DQ[DQ tests · R1–R16]
-  GD --> DQ
-  DQ --> SC[Scorecard · precision/recall vs answer key]
+  SV --> DQ[DQ · one model per rule R1–R16]
+  REF --> DQ
+  DQ --> SC[dq_issue · dq_scorecard_daily · dq_detection_eval]
 ```
+
+- **No AWS account and nothing on a laptop.** Everything that touches a cloud service runs in GitHub Actions, with
+  credentials in the GitHub Environment `dev` ([ADR 0002](docs/adr/0002-managed-kafka-connect-and-ci-execution.md),
+  [ADR 0003](docs/adr/0003-snowflake-internal-stage-and-aiven-snowflake-sink.md)).
+- **Bronze keeps every row.** Each row carries 25 metadata columns (Kafka topic, partition, offset, headers, source
+  file, load times). Duplicates are flagged in `V_RAW_*` views and removed at the entry to silver. JSON Schema rules
+  are checked in dbt, not at load ([ADR 0004](docs/adr/0004-bronze-loaders-dedup-and-validation.md)).
+- **dbt runs in Snowflake** as the project object `VLP_DP.DBT.VELOPARC` (dbt Projects on Snowflake, dbt Core 1.12),
+  deployed and executed by the `dbt` workflow. It uses no Hub packages: surrogate keys, GS1 check digits and generic
+  tests are project macros.
+
+## Data quality, measured
+
+Each cross-source rule in [`contracts/README.md`](contracts/README.md) (R1–R16, plus contract checks) is a dbt model
+`DQ.dq_rule_*`. It returns one row per violation, with the bronze lineage of the offending record (file, offset,
+event id) for root cause, and a `no_violations` test with `meta: {rule_id, dimension, owner}`. Rules warn, they do
+not stop the pipeline: the generator injects anomalies on purpose.
+
+| Model | What it holds |
+| --- | --- |
+| `dq_rule_catalog` (seed) | Rule, description, sources, DQ dimension, owner, acceptable threshold |
+| `dq_issue` | Every violation of every rule, with dimension, owner and bronze lineage |
+| `dq_scorecard_daily` | Data product × source × country × dimension × day: `pct_valid` against the threshold, green/amber/red |
+| `dq_detection_eval` | Per rule: detections vs injected anomalies and vs the generator's own checker, with precision and recall |
+
+The first evaluation found a design lesson worth reading: once schema-invalid records reach silver flagged instead of
+quarantined, one malformed GLN was counted by three rules. See
+[`docs/data-quality/detection_evaluation.md`](docs/data-quality/detection_evaluation.md) for the results per rule and
+the findings.
 
 ## Gold data model (star schema)
 
@@ -154,33 +187,55 @@ erDiagram
 
 `fct_gl_revenue` and `fct_partner_cost` join `dim_date` on `period` (month grain). The full model is in [`docs/data-model/gold_star_schema.dbml`](docs/data-model/gold_star_schema.dbml) and the column-level lineage in [`docs/data-model/silver_to_gold_mapping.md`](docs/data-model/silver_to_gold_mapping.md).
 
-## What is here today
+## Repository layout
 
 | Path | Content |
 | --- | --- |
-| `contracts/schemas/` | JSON Schemas for the 8 sources |
-| `contracts/examples/` | 12 valid example payloads that describe one coherent story (customer → shipment → scan → invoice → credit note) |
-| `contracts/validate_examples.py` | Validates the examples against the schemas and the cross-source rules R1, R2, R6, R7, R8, R9, R12, R14, R15 |
-| `contracts/README.md` | Generation order, cross-source rules R1–R16, anomalies to inject |
-| `docs/architecture/` | Ingestion design (Kafka → S3 → bronze) and the phase-by-phase implementation plan |
+| `contracts/` | JSON Schemas of the 8 sources, coherent example payloads and their validator, cross-source rules R1–R16 |
+| `generator/` | Synthetic data generator: coherent world, anomalies with an answer key, publish to Kafka and upload to the stages ([README](generator/README.md)) |
+| `connect/` | Aiven Snowflake sink connector template |
+| `infra/snowflake/` | One-time bootstrap SQL and schemachange migrations (stages, bronze tables, loaders, views, roles) |
+| `dbt/veloparc/` | dbt project: `staging` → `silver` → `gold` → `dq`, with column-level documentation |
+| `docs/architecture/` | Ingestion design and the phase-by-phase implementation plan |
 | `docs/data-model/` | Silver and gold models (DBML) and column-level mappings |
-| `generator/` | Synthetic data generator: coherent world, anomalies with an answer key, landing files in the S3 Sink format ([README](generator/README.md)) |
+| `docs/data-quality/` | Detection evaluation results and findings |
 | `docs/adr/` | Architecture decision records |
-| `Makefile`, `pyproject.toml`, `.github/workflows/` | Tooling (uv, ruff, pytest, pre-commit) and CI/CD |
+| `.github/workflows/` | CI, merge on approval and the manual workflows below |
 
-## Development
+## How it runs
 
-Requires [uv](https://docs.astral.sh/uv/) (it installs Python 3.12 and the pinned dependencies).
+Everything runs in GitHub Actions. The manual workflows, in the order a fresh environment needs them:
+
+| Workflow | What it does |
+| --- | --- |
+| `snowflake-deploy` | Applies the Snowflake migrations with schemachange (schemas, stages, bronze tables, loader tasks, views) |
+| `kafka-setup` | Creates the Kafka topics, the producer ACL and the JSON Schemas on Aiven |
+| `connector-deploy` | Rotates the connector's key pair and creates or updates the Aiven Snowflake sink connector |
+| `generate` | Generates the 2-month backfill and uploads it, the reference CSVs and the answer key to the stages |
+| `publish` | Generates a window and publishes it: Kafka topics to Aiven, file topics to the stage |
+| `bronze-load` | `COPY INTO` the `RAW_*`, `REF` and generator manifest tables from the stages |
+| `dbt` | Deploys the dbt project to Snowflake and runs a dbt command there (`build`, `show --select ...`) |
+| `snowflake-inspect`, `bronze-preview`, `kafka-check` | Read-only checks |
+
+Local development needs only [uv](https://docs.astral.sh/uv/) (it installs Python 3.12 and the pinned dependencies)
+and no credentials:
 
 ```bash
 make setup                 # uv sync + git hooks
-make lint test validate-contracts
+make lint test validate-contracts   # ruff, pytest, contract examples, dbt parse
 make generate              # 2-month backfill into out/ (see generator/README.md)
 ```
 
-Every PR runs the same checks in CI. Approving a PR (or labelling it `ready-to-merge`) re-verifies it against the latest `main`, merges it and starts the deploy pipeline: see [ADR 0001](docs/adr/0001-ci-cd-pipeline.md).
+Every PR runs the same checks in CI. Approving a PR (or labelling it `ready-to-merge`) re-verifies it against the
+latest `main` and merges it: see [ADR 0001](docs/adr/0001-ci-cd-pipeline.md).
 
-Next: Kafka on Aiven (`connect/`), infrastructure (`infra/`) and the dbt project (`dbt/`). See [`docs/architecture/implementation_plan.md`](docs/architecture/implementation_plan.md).
+## Limitations and next steps
+
+- **Orchestration.** dbt runs on demand through the `dbt` workflow. The next step is a Snowflake task running
+  `EXECUTE DBT PROJECT` after the bronze loaders.
+- **Known data gaps.** The file-based topics of the 2026-11-01 publish are not on the stage, so the answer key covers
+  the backfill only. The open modelling gaps are listed in both mapping documents.
+- **Reporting.** A Power BI report on the gold star schema and the DQ models is planned.
 
 ## Licence
 
