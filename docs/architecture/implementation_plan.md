@@ -219,31 +219,26 @@ It is built on the data already in Snowflake (no new ingestion, connector unchan
    the tables are small (largest: tracking events, about 140 MB of gzip JSON) and automatic clustering is billed
    as serverless compute; add `CLUSTER BY (TO_DATE(_KAFKA_TS))` on shipments and tracking events if volumes grow.
    `bronze-preview` (read-only) runs both SELECTs on real data before the migration is applied.
-3. **Migrations** (schemachange): `RAW_*`, `DQ_QUARANTINE`, `LOAD_AUDIT`, `REF` and `DQ` ground-truth tables, grants;
-   repeatable `R__` scripts for the UDF, views, streams and tasks.
+3. **Migrations** (schemachange): `RAW_*` (V1.4.0, generated), `LOAD_AUDIT` (V1.5.0), `REF` and `DQ` answer-key
+   tables (V1.6.0); repeatable, generated `R__` scripts for the connector streams and tasks and for the views.
 4. **File loader:** `veloparc-gen bronze-load` (workflow `bronze-load`) runs one `COPY INTO` per topic with
    transformation (`METADATA$FILENAME`, `FILE_ROW_NUMBER`, `FILE_CONTENT_KEY`, `FILE_LAST_MODIFIED`,
    `START_SCAN_TIME`), `ON_ERROR = CONTINUE`, results in `LOAD_AUDIT`. COPY load metadata skips files already
-   loaded. No pipe: there is no auto-ingest on internal stages.
+   loaded. No pipe: there is no auto-ingest on internal stages. Done on 2026-11-24: 5,225 files, 0 errors.
 5. **Connector loader:** change tracking on `KAFKA_*`, an append-only stream per table and a triggered task
-   (`WHEN SYSTEM$STREAM_HAS_DATA`, `WH_LOAD`) that maps `RECORD_METADATA` to the same columns (file columns NULL).
-6. **UDF `BRONZE.VALIDATE_JSON(schema_id, payload)`** in Python with `jsonschema` 4.26.0 (runtime 3.12) and the 8
-   schemas embedded at deploy time; validators cached at module level; returns an array of errors (empty = valid).
-   Tested with pytest against the contract examples and the generator's schema anomalies.
-7. **GS1 UDFs:** `GS1_CHECK_DIGIT_OK(code)` and `GS1_SSCC_FROM_URN(urn)` in SQL, tested against the same cases as
-   the generator's `pytest`.
-8. **Validation stream + task:** an append-only stream per `RAW_*` table; a triggered task applies the UDF and
-   inserts invalid rows into `BRONZE.DQ_QUARANTINE` (`_FILE_NAME`, `_KAFKA_OFFSET`, `_SCHEMA_ID`, `errors`,
-   `RAW_PAYLOAD`, `_DETECTED_AT`). Bronze loses no rows; silver excludes the quarantined ones.
-9. **Technical controls** in `BRONZE` views that dbt uses as sources: `V_RAW_*` with `_IS_TECH_DUP` (topic,
-   partition, offset, `ce_id`) and `_IS_RESEND` (topic, `ce_id`), filtered by the `stg_` models; GL batch
-   completeness (distinct `_SOURCE_TXN_SEQ` per `_SOURCE_TXN_ID` = `_SOURCE_TXN_COUNT`).
-10. **Reference and answer key:** the generator's reference CSVs into `REF.FX_RATE_DAILY`, `REF.POSTAL_ZONE`,
-    `REF.COUNTRY_ALIAS`; `run_manifest.json`, `anomaly_manifest.jsonl` and `rule_violations.jsonl` into
-    `DQ.GENERATOR_RUNS`, `DQ.ANOMALY_GROUND_TRUTH` and `DQ.GENERATOR_RULE_VIOLATIONS`, keyed by `run_id`.
-11. **Phase check** (`bronze-check` workflow): counts per topic in bronze after dedup = `run_manifest.json`; every
-    schema anomaly of the manifest in `DQ_QUARANTINE`; GL batches complete; both paths fill the same non-file
-    columns. Known gaps: the file-based topics of 2026-11-01 and the manifests of that publish are not on the stage.
+   (`WHEN SYSTEM$STREAM_HAS_DATA`, `WH_LOAD`, UTC) that maps `RECORD_METADATA` to the same columns (file columns
+   NULL). Done on 2026-11-24: 558 shipments, 815 tracking events, 8 CRM objects.
+6. **Views dbt reads as sources:** `V_RAW_*` with `_IS_TECH_DUP` (topic, partition, offset, `ce_id`) and
+   `_IS_RESEND` (topic, `ce_id` first seen elsewhere), filtered by the `stg_` models; `V_GL_BATCH_COMPLETENESS`.
+7. **Reference and answer key**, in the same `bronze-load` run: the generator's reference CSVs into
+   `REF.FX_RATE_DAILY`, `REF.POSTAL_ZONE`, `REF.COUNTRY_ALIAS` (replaced); `run_manifest.json`,
+   `anomaly_manifest.jsonl` and `rule_violations.jsonl` into `DQ.GENERATOR_RUNS`, `DQ.ANOMALY_GROUND_TRUTH` and
+   `DQ.GENERATOR_RULE_VIOLATIONS` (appended, keyed by `run_id`).
+8. **Schema validation moves to dbt** (ADR 0004, decision 6): no UDF, quarantine or validation task in bronze.
+   GS1 check-digit and SSCC-from-URN logic become dbt macros in Phase 7/9.
+9. **Phase check**, done as dbt tests on the sources in Phase 7 (counts per topic vs `DQ.GENERATOR_RUNS`, GL batches
+   complete) instead of a separate workflow. Known gaps: the file-based topics of 2026-11-01 and the manifests of
+   that publish are not on the stage.
 
 ## Phase 7 · dbt and silver
 

@@ -82,18 +82,18 @@ def _audit_sql() -> str:
     return f"INSERT INTO {AUDIT_TABLE} ({', '.join(_AUDIT_COLUMNS)}) VALUES ({placeholders})"
 
 
-def load_topic(cur, topic: spec.BronzeTopic, load_id: str, run: str | None) -> dict:
+def _copy_and_audit(cur, sql: str, loader: str, table: str, topic: str | None, load_id: str, run: str | None) -> dict:
     started = datetime.now(UTC)
-    cur.execute(spec.copy_sql(topic))
+    cur.execute(sql)
     query_id = getattr(cur, "sfqid", None)
     summary = summarize_copy(_rows(cur))
     cur.execute(
         _audit_sql(),
         (
             load_id,
-            "copy",
-            topic.table,
-            topic.topic,
+            loader,
+            table,
+            topic,
             query_id,
             started.isoformat(),
             summary["files_loaded"],
@@ -107,7 +107,125 @@ def load_topic(cur, topic: spec.BronzeTopic, load_id: str, run: str | None) -> d
             run,
         ),
     )
-    return {"table": topic.table, "query_id": query_id, **summary}
+    return {"table": table, "query_id": query_id, **summary}
+
+
+def load_topic(cur, topic: spec.BronzeTopic, load_id: str, run: str | None) -> dict:
+    return _copy_and_audit(cur, spec.copy_sql(topic), "copy", topic.table, topic.topic, load_id, run)
+
+
+# --------------------------------------------------------------------------- reference tables and manifests
+
+GENERATOR_STAGE = f"{spec.BRONZE}.GENERATOR"
+REFERENCE_FORMAT = f"{spec.BRONZE}.FF_REFERENCE_CSV"
+MANIFEST_FORMAT = f"{spec.BRONZE}.FF_GENERATOR_JSON"
+
+# Table -> (column, expression over the CSV fields), in the order the generator writes them.
+REFERENCE_TABLES = {
+    "FX_RATE_DAILY": (
+        ("RATE_DATE", "TRY_TO_DATE($1)"),
+        ("CURRENCY", "$2"),
+        ("RATE_TO_EUR", "TRY_CAST($3 AS NUMBER(18, 6))"),
+    ),
+    "POSTAL_ZONE": (("COUNTRY_CODE", "$1"), ("POSTAL_PREFIX", "$2"), ("ZONE_CODE", "$3")),
+    "COUNTRY_ALIAS": (("ALIAS_NORM", "$1"), ("ISO2", "$2")),
+}
+
+_RUN_ID = "REGEXP_SUBSTR(METADATA$FILENAME, 'runs/([^/]+)/', 1, 1, 'e')"
+# Table -> (file name pattern, (column, expression over the JSON document)).
+MANIFEST_TABLES = {
+    "GENERATOR_RUNS": (
+        "run_manifest[.]json",
+        (("RUN_ID", _RUN_ID), ("MANIFEST", "$1"), ("_FILE_NAME", "METADATA$FILENAME")),
+    ),
+    "ANOMALY_GROUND_TRUTH": (
+        "anomaly_manifest[.]jsonl",
+        (
+            ("RUN_ID", _RUN_ID),
+            ("ANOMALY_ID", "$1:anomaly_id::VARCHAR"),
+            ("ANOMALY_TYPE", "$1:anomaly_type::VARCHAR"),
+            ("RULE_ID", "$1:rule::VARCHAR"),
+            ("DQ_DIMENSION", "$1:dq_dimension::VARCHAR"),
+            ("SOURCE", "$1:source::VARCHAR"),
+            ("BUSINESS_KEY", "$1:business_key::VARCHAR"),
+            ("COUNTRY", "$1:country::VARCHAR"),
+            ("EVENT_DATE", "TRY_TO_DATE($1:event_date::VARCHAR)"),
+            ("SCHEMA_ANOMALY", "TRY_TO_BOOLEAN($1:schema_anomaly::VARCHAR)"),
+            ("ENTRY", "$1"),
+            ("_FILE_NAME", "METADATA$FILENAME"),
+            ("_FILE_ROW_NUMBER", "METADATA$FILE_ROW_NUMBER"),
+        ),
+    ),
+    "GENERATOR_RULE_VIOLATIONS": (
+        "rule_violations[.]jsonl",
+        (
+            ("RUN_ID", _RUN_ID),
+            ("RULE_ID", "$1:rule::VARCHAR"),
+            ("SOURCE", "$1:source::VARCHAR"),
+            ("BUSINESS_KEY", "$1:key::VARCHAR"),
+            ("MESSAGE", "$1:message::VARCHAR"),
+            ("ENTRY", "$1"),
+            ("_FILE_NAME", "METADATA$FILENAME"),
+            ("_FILE_ROW_NUMBER", "METADATA$FILE_ROW_NUMBER"),
+        ),
+    ),
+}
+
+
+def _copy_select(target: str, columns, source: str, file_format: str, extra: str) -> str:
+    names = ", ".join(c for c, _ in columns)
+    exprs = ", ".join(e for _, e in columns)
+    return (
+        f"COPY INTO {target} ({names})\nFROM (SELECT {exprs} FROM {source})\n"
+        f"FILE_FORMAT = (FORMAT_NAME = '{file_format}')\n{extra}"
+    )
+
+
+def reference_copy_sql(table: str) -> str:
+    """Full replace: the caller deletes the rows first; FORCE reloads the unchanged file."""
+    return _copy_select(
+        f"{spec.DATABASE}.REF.{table}",
+        REFERENCE_TABLES[table],
+        f"@{GENERATOR_STAGE}/reference/{table}/",
+        REFERENCE_FORMAT,
+        "FORCE = TRUE\nON_ERROR = ABORT_STATEMENT",
+    )
+
+
+def manifest_copy_sql(table: str) -> str:
+    """Append: COPY skips manifest files already loaded, so each run is loaded once."""
+    pattern, columns = MANIFEST_TABLES[table]
+    return _copy_select(
+        f"{spec.DATABASE}.DQ.{table}",
+        columns,
+        f"@{GENERATOR_STAGE}/runs/",
+        MANIFEST_FORMAT,
+        f"PATTERN = '.*{pattern}'\nON_ERROR = ABORT_STATEMENT",
+    )
+
+
+def load_reference(cur, load_id: str, run: str | None) -> list[dict]:
+    results = []
+    for table in REFERENCE_TABLES:
+        cur.execute("BEGIN")
+        try:
+            cur.execute(f"DELETE FROM {spec.DATABASE}.REF.{table}")
+            result = _copy_and_audit(
+                cur, reference_copy_sql(table), "copy-reference", f"REF.{table}", None, load_id, run
+            )
+            cur.execute("COMMIT")
+        except Exception:
+            cur.execute("ROLLBACK")
+            raise
+        results.append(result)
+    return results
+
+
+def load_manifests(cur, load_id: str, run: str | None) -> list[dict]:
+    return [
+        _copy_and_audit(cur, manifest_copy_sql(table), "copy-manifest", f"DQ.{table}", None, load_id, run)
+        for table in MANIFEST_TABLES
+    ]
 
 
 def select_topics(names: list[str] | None) -> list[spec.BronzeTopic]:
@@ -130,6 +248,9 @@ def load(cur, names: list[str] | None = None, log=print, env: dict[str, str] | N
             f"failed {result['files_failed']}; rows loaded {result['rows_loaded']}, errors {result['errors_seen']}"
         )
         results.append(result)
+    if names is None:  # a full load also refreshes the reference tables and appends new generator manifests
+        log("reference tables -> REF, generator manifests -> DQ")
+        results += load_reference(cur, load_id, run) + load_manifests(cur, load_id, run)
     return {"load_id": load_id, "github_run": run, "topics": results}
 
 
@@ -150,6 +271,9 @@ def status(cur) -> dict:
             f"FROM {spec.BRONZE}.{topic.table}"
         )
         tables[topic.table] = _rows(cur)[0]
+    for table in [f"REF.{t}" for t in REFERENCE_TABLES] + [f"DQ.{t}" for t in MANIFEST_TABLES]:
+        cur.execute(f"SELECT COUNT(*) AS total_rows FROM {spec.DATABASE}.{table}")
+        tables[table] = _rows(cur)[0]
     cur.execute(f"SHOW TASKS LIKE 'TASK_LOAD_RAW%' IN SCHEMA {spec.BRONZE}")
     tasks = {str(t["name"]): t.get("state") for t in _rows(cur)}
     streams = {}
