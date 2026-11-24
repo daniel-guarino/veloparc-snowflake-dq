@@ -206,42 +206,42 @@ Open the trial in this phase and create everything through versioned SQL scripts
 
 ## Phase 6 · Bronze
 
-Bronze stays outside dbt: it is ingestion, not transformation. One `RAW_*` table and one pipe per topic, append-only, with the 25 metadata columns and the payload intact in `VARIANT`. Start with a manual `COPY INTO` over the backfill and only then switch on the pipes.
+Bronze stays outside dbt: it is ingestion, not transformation. One `RAW_*` table per business topic (8; the DLQ
+stays out for now), append-only, with the 25 metadata columns, the payload intact in `VARIANT` and `BK_*` keys.
+It is built on the data already in Snowflake (no new ingestion, connector unchanged): the backfill files in
+`@BRONZE.LANDING` and the connector tables `KAFKA_*`. Decisions in ADR 0004; columns and sources per path in
+`ingestion_kafka_s3_bronze.md`.
 
-1. **DDL for the 9 tables** (8 sources + `RAW_DLQ`), generated from a single template so the 25 columns are identical everywhere. `BK_*` per source (e.g. `BK_TRACK_ID`). Clustering on `TO_DATE(_KAFKA_TS)` only on the two large tables (shipments and events).
-2. **COPY with transformation**, the same SELECT later used in the pipe:
-
-```sql
-COPY INTO BRONZE.RAW_TRACKING_EVENTS (...)
-FROM (
-  SELECT
-    $1:_kafka_headers:vlp_op::varchar           AS _OP_TYPE,
-    $1:payload:recordTime::timestamp_tz         AS _SOURCE_TS,
-    $1:_kafka_headers:ce_source::varchar        AS _SOURCE_SYSTEM,
-    $1:_kafka_headers:vlp_batch_id::varchar     AS _SOURCE_TXN_ID,
-    $1:_kafka_headers:ce_id::varchar            AS _EVENT_ID,
-    $1:_kafka_topic::varchar                    AS _KAFKA_TOPIC,
-    $1:_kafka_partition::int                    AS _KAFKA_PARTITION,
-    $1:_kafka_offset::number                    AS _KAFKA_OFFSET,
-    $1:_kafka_headers                           AS _KAFKA_HEADERS,
-    METADATA$FILENAME, METADATA$FILE_ROW_NUMBER,
-    METADATA$FILE_CONTENT_KEY, METADATA$FILE_LAST_MODIFIED,
-    CURRENT_TIMESTAMP()                         AS _LOAD_TS,
-    $1:payload                                  AS RAW_PAYLOAD,
-    $1:payload:trackId::varchar                 AS BK_TRACK_ID
-    -- ... remaining metadata columns
-  FROM @LANDING.STG_LANDING/vlp.ops.tracking-event.v1/
-)
-FILE_FORMAT = (FORMAT_NAME = 'LANDING.FF_JSONL_GZ')
-ON_ERROR = CONTINUE;
-```
-
-3. **Pipes with `AUTO_INGEST = TRUE`**, one per topic (`PIPE_RAW_TRACKING_EVENTS` ...), with the same SELECT. Hook up the S3 → SQS notification from Phase 4 and confirm with `SYSTEM$PIPE_STATUS` and `COPY_HISTORY`.
-4. **UDF `UTIL.VALIDATE_JSON(schema_id, payload)`** in Python with the `jsonschema` package. The 8 schemas go in an internal stage and come in through the `IMPORTS` clause; validators are cached at module level so the schema isn't recompiled for every row. Returns an array of errors (empty = valid).
-5. **GS1 UDFs:** `GS1_CHECK_DIGIT_OK(code)` and `GS1_SSCC_FROM_URN(urn)` in SQL, tested against the same cases as the generator's `pytest`.
-6. **Validation stream + task:** an append-only stream per `RAW_*` table; a task `WHEN SYSTEM$STREAM_HAS_DATA(...)` every 5 minutes applies the UDF and inserts invalid rows into `BRONZE.DQ_QUARANTINE` (`_FILE_NAME`, `_KAFKA_OFFSET`, `_SCHEMA_ID`, `errors`, `RAW_PAYLOAD`, `_DETECTED_AT`). Bronze loses no rows; silver excludes the quarantined ones.
-7. **Technical controls** in `BRONZE` views that dbt uses as sources: duplicates by (topic, partition, offset) and by `ce_id` (keep the first); GL batch completeness (`COUNT(*)` per `_SOURCE_TXN_ID` = `_SOURCE_TXN_COUNT`).
-8. **Phase check:** counts per topic in bronze = counts in `run_manifest.json`; all schema anomalies from the manifest appear in `DQ_QUARANTINE`.
+1. **Inspect first** (`snowflake-inspect` workflow, read-only): connector tables, header types, landing envelopes,
+   generator stage, UDF packages. Done on 2026-11-24; its findings are in ADR 0004.
+2. **One column spec** (Python) generates the DDL of the 8 tables and the SELECT of both loaders, so the 25 columns
+   are identical everywhere; the generated SQL is committed and CI fails if it is stale. Clustering on
+   `TO_DATE(_KAFKA_TS)` only on shipments and tracking events.
+3. **Migrations** (schemachange): `RAW_*`, `DQ_QUARANTINE`, `LOAD_AUDIT`, `REF` and `DQ` ground-truth tables, grants;
+   repeatable `R__` scripts for the UDF, views, streams and tasks.
+4. **File loader:** `veloparc-gen bronze-load` (workflow `bronze-load`) runs one `COPY INTO` per topic with
+   transformation (`METADATA$FILENAME`, `FILE_ROW_NUMBER`, `FILE_CONTENT_KEY`, `FILE_LAST_MODIFIED`,
+   `START_SCAN_TIME`), `ON_ERROR = CONTINUE`, results in `LOAD_AUDIT`. COPY load metadata skips files already
+   loaded. No pipe: there is no auto-ingest on internal stages.
+5. **Connector loader:** change tracking on `KAFKA_*`, an append-only stream per table and a triggered task
+   (`WHEN SYSTEM$STREAM_HAS_DATA`, `WH_LOAD`) that maps `RECORD_METADATA` to the same columns (file columns NULL).
+6. **UDF `BRONZE.VALIDATE_JSON(schema_id, payload)`** in Python with `jsonschema` 4.26.0 (runtime 3.12) and the 8
+   schemas embedded at deploy time; validators cached at module level; returns an array of errors (empty = valid).
+   Tested with pytest against the contract examples and the generator's schema anomalies.
+7. **GS1 UDFs:** `GS1_CHECK_DIGIT_OK(code)` and `GS1_SSCC_FROM_URN(urn)` in SQL, tested against the same cases as
+   the generator's `pytest`.
+8. **Validation stream + task:** an append-only stream per `RAW_*` table; a triggered task applies the UDF and
+   inserts invalid rows into `BRONZE.DQ_QUARANTINE` (`_FILE_NAME`, `_KAFKA_OFFSET`, `_SCHEMA_ID`, `errors`,
+   `RAW_PAYLOAD`, `_DETECTED_AT`). Bronze loses no rows; silver excludes the quarantined ones.
+9. **Technical controls** in `BRONZE` views that dbt uses as sources: `V_RAW_*` with `_IS_TECH_DUP` (topic,
+   partition, offset, `ce_id`) and `_IS_RESEND` (topic, `ce_id`), filtered by the `stg_` models; GL batch
+   completeness (distinct `_SOURCE_TXN_SEQ` per `_SOURCE_TXN_ID` = `_SOURCE_TXN_COUNT`).
+10. **Reference and answer key:** the generator's reference CSVs into `REF.FX_RATE_DAILY`, `REF.POSTAL_ZONE`,
+    `REF.COUNTRY_ALIAS`; `run_manifest.json`, `anomaly_manifest.jsonl` and `rule_violations.jsonl` into
+    `DQ.GENERATOR_RUNS`, `DQ.ANOMALY_GROUND_TRUTH` and `DQ.GENERATOR_RULE_VIOLATIONS`, keyed by `run_id`.
+11. **Phase check** (`bronze-check` workflow): counts per topic in bronze after dedup = `run_manifest.json`; every
+    schema anomaly of the manifest in `DQ_QUARANTINE`; GL batches complete; both paths fill the same non-file
+    columns. Known gaps: the file-based topics of 2026-11-01 and the manifests of that publish are not on the stage.
 
 ## Phase 7 · dbt and silver
 
@@ -252,7 +252,7 @@ dbt starts at the bronze views and implements the source → silver mapping colu
 1. `dbt-core` + `dbt-snowflake` in `pyproject.toml`, pinned versions. `profiles.yml` with `env_var()` only and private-key authentication; targets `dev` (schema `DBT_DANIEL`), `ci` (schema per PR) and `prd`.
 2. Packages: `dbt_utils`, `dbt_expectations` (domain, range and regex tests) and `elementary` (test result history and volume and freshness anomalies).
 3. `sources.yml` with the bronze views, `loaded_at_field: _LOAD_TS` and `freshness` (warn at 2 h, error at 6 h) for hourly topics.
-4. Seeds: `country_alias`, `postal_zone`, `fx_rate_daily` (generated in Phase 2) and `unknown_members`.
+4. Sources for `REF.COUNTRY_ALIAS`, `REF.POSTAL_ZONE`, `REF.FX_RATE_DAILY` (generated in Phase 2, loaded in Phase 6); seed only for `unknown_members`.
 5. Conventions: `stg_<source>` as views, `silver` as `incremental` with `merge` and `unique_key`, `gold` as table or incremental. Macros for repeated patterns: `parse_ts_utc()`, `latest_version()` (QUALIFY per key), `not_quarantined()`.
 
 **Build order for silver models** (the same as the generator, so each step can test references to the previous ones):
