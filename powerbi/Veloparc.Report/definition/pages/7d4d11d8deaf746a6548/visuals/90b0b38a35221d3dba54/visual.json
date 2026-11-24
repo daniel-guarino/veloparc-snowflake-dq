@@ -1,0 +1,238 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.9.0/schema.json",
+  "name": "90b0b38a35221d3dba54",
+  "position": {
+    "x": 32,
+    "y": 140,
+    "z": 4000,
+    "height": 564,
+    "width": 1216,
+    "tabOrder": 4000
+  },
+  "visual": {
+    "visualType": "tableEx",
+    "query": {
+      "queryState": {
+        "Values": {
+          "projections": [
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "dq_issue"
+                    }
+                  },
+                  "Property": "rule_id"
+                }
+              },
+              "queryRef": "dq_issue.rule_id",
+              "nativeQueryRef": "rule_id"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "dq_issue"
+                    }
+                  },
+                  "Property": "source"
+                }
+              },
+              "queryRef": "dq_issue.source",
+              "nativeQueryRef": "source"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "dq_issue"
+                    }
+                  },
+                  "Property": "country_code"
+                }
+              },
+              "queryRef": "dq_issue.country_code",
+              "nativeQueryRef": "country_code"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "dq_issue"
+                    }
+                  },
+                  "Property": "event_date"
+                }
+              },
+              "queryRef": "dq_issue.event_date",
+              "nativeQueryRef": "event_date"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "dq_issue"
+                    }
+                  },
+                  "Property": "business_key"
+                }
+              },
+              "queryRef": "dq_issue.business_key",
+              "nativeQueryRef": "business_key"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "dq_issue"
+                    }
+                  },
+                  "Property": "details"
+                }
+              },
+              "queryRef": "dq_issue.details",
+              "nativeQueryRef": "details"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "dq_issue"
+                    }
+                  },
+                  "Property": "_file_name"
+                }
+              },
+              "queryRef": "dq_issue._file_name",
+              "nativeQueryRef": "_file_name"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "dq_issue"
+                    }
+                  },
+                  "Property": "_kafka_offset"
+                }
+              },
+              "queryRef": "dq_issue._kafka_offset",
+              "nativeQueryRef": "_kafka_offset"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "dq_issue"
+                    }
+                  },
+                  "Property": "_event_id"
+                }
+              },
+              "queryRef": "dq_issue._event_id",
+              "nativeQueryRef": "_event_id"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "dq_issue"
+                    }
+                  },
+                  "Property": "_source_txn_id"
+                }
+              },
+              "queryRef": "dq_issue._source_txn_id",
+              "nativeQueryRef": "_source_txn_id"
+            }
+          ]
+        }
+      },
+      "sortDefinition": {
+        "sort": [
+          {
+            "field": {
+              "Column": {
+                "Expression": {
+                  "SourceRef": {
+                    "Entity": "dq_issue"
+                  }
+                },
+                "Property": "event_date"
+              }
+            },
+            "direction": "Ascending"
+          }
+        ],
+        "isDefaultSort": false
+      }
+    },
+    "objects": {},
+    "visualContainerObjects": {
+      "title": [
+        {
+          "properties": {
+            "show": {
+              "expr": {
+                "Literal": {
+                  "Value": "true"
+                }
+              }
+            },
+            "text": {
+              "expr": {
+                "Literal": {
+                  "Value": "'Violations'"
+                }
+              }
+            }
+          }
+        }
+      ],
+      "padding": [
+        {
+          "properties": {
+            "top": {
+              "expr": {
+                "Literal": {
+                  "Value": "4D"
+                }
+              }
+            },
+            "bottom": {
+              "expr": {
+                "Literal": {
+                  "Value": "4D"
+                }
+              }
+            },
+            "left": {
+              "expr": {
+                "Literal": {
+                  "Value": "0D"
+                }
+              }
+            },
+            "right": {
+              "expr": {
+                "Literal": {
+                  "Value": "8D"
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
