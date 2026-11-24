@@ -1,6 +1,6 @@
 # Manual: generate a window and publish what arrives in it. Kafka topics go to Aiven (as the generator's
-# service user); file-based topics and the manifests are kept as a workflow artifact until the internal stage
-# exists (Phase 3d). Use dry_run to test without touching Kafka.
+# service user); file-based topics, manifests and offsets go to the Snowflake stages (skipped on dry_run).
+# Offsets of the file-based topics are restored from @GENERATOR/state first, so they continue the backfill.
 name: publish
 
 on:
@@ -36,6 +36,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     environment: dev
+    env:
+      SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+      SNOWFLAKE_PAT: ${{ secrets.SNOWFLAKE_PAT }}
+      SNOWFLAKE_USER: ${{ vars.SNOWFLAKE_USER || 'SVC_VELOPARC_CI' }}
+      SNOWFLAKE_ROLE: VLP_DEPLOYER
+      SNOWFLAKE_WAREHOUSE: WH_DEPLOY
     steps:
       - uses: actions/checkout@v7.0.1
 
@@ -45,6 +51,10 @@ jobs:
 
       - name: Install pinned dependencies
         run: uv sync --frozen --no-dev
+
+      - name: Restore offsets of the file-based topics
+        if: ${{ !inputs.dry_run }}
+        run: uv run --no-dev veloparc-gen stage-pull-state --state-dir state
 
       - name: Publish
         env:
@@ -59,6 +69,10 @@ jobs:
         run: |
           uv run --no-dev veloparc-gen publish --from "$FROM" --to "$TO" --countries "$COUNTRIES" \
             --out out --state-dir state $DRY_RUN
+
+      - name: Upload file-based topics, manifests and offsets to Snowflake stages
+        if: ${{ !inputs.dry_run }}
+        run: uv run --no-dev veloparc-gen stage-upload --out out --state-dir state
 
       - name: Keep manifests and file-based topics
         if: always()
