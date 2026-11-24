@@ -1,0 +1,12 @@
+rule_id,description,sources,dimension,severity,owner,threshold_pct
+SCHEMA,Payload breaks its JSON Schema contract (enum or pattern),tracking_event; invoice,Validity,warn,Data platform,99.9
+R1,One TrackID per ShipmentUnit in each VeloShip message,veloship_shipment,Completeness,warn,Shipping operations,99.9
+R2,Every TrackID of events and invoices exists in a shipment; invoiced parcels were picked up; delivered parcels are invoiced; invoiced customers exist,tracking_event; invoice; veloship_shipment; master_data,Consistency,warn,Billing operations,99.9
+R3,Scan sequence DATA_RECEIVED > PICKUP > HUB (1-3) > IN_DELIVERY > DELIVERED; CANCELLED only before PICKUP,tracking_event,Consistency,warn,Network operations,99.5
+R4,No repeated scan with the same TrackID; status and GLN,tracking_event,Uniqueness,warn,Network operations,99.9
+R5,recordTime >= eventTime and at most 15 minutes later; every active country records scans every day,tracking_event,Timeliness,warn,Network operations,99.0
+R6,Scan GLN is a depot; the last DELIVERED scan is in the consignee zone,tracking_event; master_data,Consistency,warn,Network operations,99.5
+R7,netAmount = basePrice + surcharges; totals.net = sum of lines; gross = net + vat,invoice,Accuracy,warn,Finance,100.0
+R8,basePrice = band price of the tariff valid on the shipping date; FUEL = basePrice x fuelSurchargePct / 100,invoice; tariff; veloship_shipment,Accuracy,warn,Finance,99.9
+R9,Credit notes are negative and reference an existing invoice,invoice,Accuracy,warn,Finance,100.0
+R13,Ledger revenue per country and month = invoice revenue in EUR (0.5%),gl_extract; invoice,Accuracy,warn,Finance,100.0
