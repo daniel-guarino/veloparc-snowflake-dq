@@ -1,0 +1,48 @@
+# Manual, read-only: runs the bronze loaders' SELECTs (generated from generator/src/veloparc_gen/bronze/spec.py) on a
+# sample of the landing files and connector tables, and reports non-NULL counts per column. Run it before applying
+# the bronze migrations. Runs only SELECT, as SVC_VELOPARC_CI (PAT) with role VLP_DEPLOYER.
+name: bronze-preview
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bronze-preview
+  cancel-in-progress: false
+
+jobs:
+  preview:
+    name: preview bronze loaders
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: dev
+    env:
+      SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+      SNOWFLAKE_PAT: ${{ secrets.SNOWFLAKE_PAT }}
+      SNOWFLAKE_USER: ${{ vars.SNOWFLAKE_USER || 'SVC_VELOPARC_CI' }}
+      SNOWFLAKE_ROLE: VLP_DEPLOYER
+      SNOWFLAKE_WAREHOUSE: WH_DEPLOY
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - uses: astral-sh/setup-uv@v10.4.0
+        with:
+          enable-cache: true
+
+      - name: Install pinned dependencies
+        run: uv sync --frozen --no-dev
+
+      - name: Preview
+        shell: bash  # bash -eo pipefail: a failure of the command is not hidden by tee
+        run: uv run --no-dev veloparc-gen bronze-preview | tee bronze-preview.txt
+
+      - name: Keep the result
+        if: always()
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: bronze-preview
+          path: bronze-preview.txt
+          retention-days: 14

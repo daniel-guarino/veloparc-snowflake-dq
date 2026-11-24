@@ -193,6 +193,51 @@ def snowflake_inspect() -> None:
     typer.echo("OK")
 
 
+MIGRATION_RAW_TABLES = Path("infra/snowflake/migrations/V1.4.0__bronze_raw_tables.sql")
+
+
+@app.command("bronze-sql")
+def bronze_sql(
+    check: Annotated[bool, typer.Option(help="Fail if the committed migration differs from the spec")] = False,
+) -> None:
+    """Generate the bronze RAW_* migration from the column spec (or check that it is up to date)."""
+    from veloparc_gen.bronze import spec
+    from veloparc_gen.config import REPO_ROOT
+
+    target = REPO_ROOT / MIGRATION_RAW_TABLES
+    generated = spec.raw_tables_migration()
+    if check:
+        if not target.exists() or target.read_text(encoding="utf-8") != generated:
+            typer.secho(f"{MIGRATION_RAW_TABLES} is stale: run `veloparc-gen bronze-sql`", fg="red", err=True)
+            raise typer.Exit(code=1)
+        typer.echo(f"{MIGRATION_RAW_TABLES} is up to date")
+        return
+    target.write_text(generated, encoding="utf-8")
+    typer.echo(f"wrote {MIGRATION_RAW_TABLES}")
+
+
+@app.command("bronze-preview")
+def bronze_preview(
+    limit: Annotated[int, typer.Option(help="Rows sampled per topic and path")] = 2000,
+) -> None:
+    """Read-only: run both bronze loaders' SELECTs on a sample and report non-NULL counts per column."""
+    import json
+
+    from veloparc_gen.bronze import preview
+    from veloparc_gen.snowflake_conn import MissingSnowflakeSettings
+
+    try:
+        result = preview.run(limit)
+    except MissingSnowflakeSettings as exc:
+        typer.secho(str(exc), fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(json.dumps(result, indent=2, default=str))
+    if result["errors"]:
+        typer.secho(f'{len(result["errors"])} statement(s) failed, see "errors"', fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1)
+    typer.echo("OK")
+
+
 @app.command("connector-deploy")
 def connector_deploy() -> None:
     """Rotate the connector key pair and create/update the Aiven Snowflake sink connector."""

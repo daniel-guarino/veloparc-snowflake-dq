@@ -26,7 +26,11 @@ The token expires after 90 days. To rotate it, see the comment at the end of the
 | `V1.1.0__warehouses.sql` | `WH_LOAD`, `WH_TRANSFORM`, `WH_ANALYTICS` (XS, 60 s auto-suspend) |
 | `V1.2.0__landing_stages.sql` | File format `FF_LANDING_JSONL`; internal stages `BRONZE.LANDING` and `BRONZE.GENERATOR` (ADR 0003) |
 | `V1.3.0__roles_and_connector_user.sql` | Roles `VLP_LOADER`, `VLP_TRANSFORMER`, `VLP_READER`, `VLP_CONNECTOR`; service user `SVC_AIVEN_CONNECTOR` (its key pair is set in Phase 3c) |
+| `V1.4.0__bronze_raw_tables.sql` | The 8 bronze `RAW_*` tables (25 metadata columns, `RAW_PAYLOAD`, `BK_*`) and their grants. **Generated** by `veloparc-gen bronze-sql` from `generator/src/veloparc_gen/bronze/spec.py`; a test fails if it is stale (ADR 0004) |
 
 The migrations are applied with [schemachange](https://github.com/Snowflake-Labs/schemachange); the history is in
 `VLP_ADMIN.SCHEMACHANGE.CHANGE_HISTORY`. Add a change as a new `V<x.y.z>__<description>.sql` file, never by
 editing an applied one.
+
+Before applying a bronze migration, run *Actions → bronze-preview* (read-only): it runs the loaders' SELECTs on
+a sample of the landing files and connector tables and shows, per column, how many values come out non-NULL.
