@@ -1,5 +1,7 @@
 # Profile used by dbt Projects on Snowflake (takes precedence over profiles.yml). No credentials: Snowflake runs
-# the project as the calling user, with the privileges of the role below.
+# the project as the calling user, with the privileges of the role below. It must be a role the caller can use as
+# its primary role: the CI user's PAT has ROLE_RESTRICTION = VLP_DEPLOYER (infra/snowflake/bootstrap), so dbt runs
+# as VLP_DEPLOYER, which inherits VLP_TRANSFORMER's grants and owns the database.
 veloparc:
   target: prod
   outputs:
@@ -7,7 +9,7 @@ veloparc:
       type: snowflake
       database: VLP_DP
       schema: SILVER
-      role: VLP_TRANSFORMER
+      role: VLP_DEPLOYER
       warehouse: WH_TRANSFORM
       threads: 4
       query_tag: veloparc-dbt

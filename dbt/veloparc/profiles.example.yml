@@ -10,6 +10,6 @@ veloparc:
       password: "{{ env_var('SNOWFLAKE_PAT', 'parse-only') }}"  # pragma: allowlist secret
       database: VLP_DP
       schema: SILVER
-      role: VLP_TRANSFORMER
+      role: VLP_DEPLOYER
       warehouse: WH_TRANSFORM
       threads: 4
