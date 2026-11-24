@@ -9,6 +9,7 @@ from __future__ import annotations
 import base64
 import json
 import os
+import re
 import urllib.error
 import urllib.request
 
@@ -43,6 +44,29 @@ def replication_for(service: dict) -> int:
     return max(1, min(3, int(service.get("node_count") or 1)))
 
 
+_POLICY = re.compile(r"([a-z][a-z0-9.]*) must be (\d+)")
+
+
+def _apply_policy(api_call, config: dict, log) -> dict:
+    """Runs api_call(config). If the plan's policy imposes a value ("retention.ms must be 259200000"), uses that
+    value, logs the adjustment and retries. Returns the config that was accepted."""
+    config = dict(config)
+    for _ in range(5):
+        try:
+            api_call(config)
+            return config
+        except AivenError as exc:
+            match = _POLICY.search(str(exc))
+            if "kafka_policy_violation" not in str(exc) or not match:
+                raise
+            key, value = match.group(1).replace(".", "_"), int(match.group(2))
+            if config.get(key) == value:
+                raise
+            log(f"  plan policy: {key} {config.get(key)} -> {value}")
+            config[key] = value
+    raise AivenError("topic config still refused after applying the plan's policy")
+
+
 def ensure_topics(api: AivenApi, config: Config, log=print) -> dict[str, str]:
     existing = api.topics()
     service = api.service()
@@ -51,22 +75,23 @@ def ensure_topics(api: AivenApi, config: Config, log=print) -> dict[str, str]:
     actions = {}
     for name, spec in desired_topics(config).items():
         if name not in existing:
-            try:
-                api.create_topic(name, spec["partitions"], replication, spec["config"])
-            except AivenError as exc:
-                if replication == 1 or "cannot be different than 1" not in str(exc):
-                    raise
-                replication = 1  # the plan only accepts one replica: keep it for the remaining topics
-                api.create_topic(name, spec["partitions"], replication, spec["config"])
+
+            def create(settings, name=name, spec=spec):
+                nonlocal replication
+                try:
+                    api.create_topic(name, spec["partitions"], replication, settings)
+                except AivenError as exc:
+                    if replication == 1 or "cannot be different than 1" not in str(exc):
+                        raise
+                    replication = 1  # the plan only accepts one replica: keep it for the remaining topics
+                    api.create_topic(name, spec["partitions"], replication, settings)
+
+            _apply_policy(create, spec["config"], log)
             actions[name] = f"created ({spec['partitions']} partitions, replication {replication})"
         else:
-            current = int(existing[name].get("partitions") or 0)
-            if current > spec["partitions"]:
-                actions[name] = f"kept: has {current} partitions (> {spec['partitions']}), partitions never shrink"
-                api.update_topic(name, current, spec["config"])
-            else:
-                api.update_topic(name, spec["partitions"], spec["config"])
-                actions[name] = "config updated"
+            partitions = max(int(existing[name].get("partitions") or 0), spec["partitions"])
+            _apply_policy(lambda settings, n=name, p=partitions: api.update_topic(n, p, settings), spec["config"], log)
+            actions[name] = "config updated"
         log(f"topic {name}: {actions[name]}")
     return actions
 
