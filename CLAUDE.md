@@ -25,6 +25,7 @@ Portfolio case: a data quality platform for the Sales & Finance data products of
 | `connect/` | Snowflake sink connector template, deployed by the `connector-deploy` workflow (key pair rotated on each run) |
 | `infra/snowflake/` | One-time bootstrap SQL (run by a human) and schemachange migrations applied by the `snowflake-deploy` workflow |
 | `dbt/veloparc/` | dbt project, deployed to Snowflake as `VLP_DP.DBT.VELOPARC` and executed there by the `dbt` workflow (dbt Projects on Snowflake, dbt Core 1.12.3, no Hub packages) |
+| `powerbi/` | Power BI report on `VLP_DP.GOLD` and `VLP_DP.DQ` as a Power BI Project (`Veloparc.pbip`): semantic model in TMDL, report in PBIR, theme in `theme/veloparc.json`, offline checks in `tools/validate_pbip.py` (`make validate-powerbi`). Opened and refreshed locally in Power BI Desktop; screenshots in `docs/screenshots/powerbi/` |
 | `docs/adr/` | Architecture decision records (0001: CI/CD pipeline; 0002: managed Kafka Connect and execution in GitHub Actions; 0003: no AWS, internal stage + Aiven Snowflake sink; 0004: bronze loaders, dedup flags, validation in dbt; Phase 0 decisions still to be written) |
 | `Makefile`, `pyproject.toml`, `.pre-commit-config.yaml`, `.github/workflows/` | Tooling: `make setup lint test validate-contracts generate`; CI on PRs, merge on approval, deploy from main |
 
