@@ -1,6 +1,6 @@
 # Veloparc · developer and CI entry points. Requires uv (https://docs.astral.sh/uv/).
 .DEFAULT_GOAL := help
-.PHONY: help setup lint format test validate-contracts generate clean dbt-parse
+.PHONY: help setup lint format test validate-contracts validate-powerbi generate clean dbt-parse
 
 UV ?= uv
 FROM ?= 2026-09-01
@@ -34,6 +34,9 @@ test: ## Unit and integration tests with coverage
 
 validate-contracts: ## Contract examples against schemas and rules R1, R2, R6-R9, R12, R14, R15
 	$(UV) run python contracts/validate_examples.py
+
+validate-powerbi: ## Power BI project: JSON, TMDL, columns vs dbt, DAX and report fields, relationships, no account ids
+	$(UV) run python powerbi/tools/validate_pbip.py
 
 generate: ## Backfill (replaces previous output): landing files, run and anomaly manifests into $(OUT)
 	$(UV) run veloparc-gen backfill --from $(FROM) --to $(TO) --countries $(COUNTRIES) --out $(OUT) --reset
