@@ -188,5 +188,39 @@ def connector_deploy() -> None:
     typer.echo("OK")
 
 
+@app.command("stage-upload")
+def stage_upload(
+    out: Annotated[Path, typer.Option(help="Generator output folder")] = Path("out"),
+    state_dir: Annotated[Path, typer.Option(help="Folder with offsets.json")] = Path("state"),
+) -> None:
+    """Upload landing files, run manifests, reference tables and offsets to the Snowflake stages."""
+    import json
+
+    from veloparc_gen import stage
+    from veloparc_gen.snowflake_conn import MissingSnowflakeSettings, connect
+
+    try:
+        with connect() as conn, conn.cursor() as cur:
+            result = stage.upload_output(cur, out, log=typer.echo)
+            result["state"] = {"offsets.json": int(stage.push_state(cur, state_dir))}
+    except MissingSnowflakeSettings as exc:
+        typer.secho(str(exc), fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(json.dumps(result, indent=2))
+
+
+@app.command("stage-pull-state")
+def stage_pull_state(
+    state_dir: Annotated[Path, typer.Option(help="Where to put offsets.json")] = Path("state"),
+) -> None:
+    """Download the generator offsets saved by the previous run (if any)."""
+    from veloparc_gen import stage
+    from veloparc_gen.snowflake_conn import connect
+
+    with connect() as conn, conn.cursor() as cur:
+        found = stage.pull_state(cur, state_dir)
+    typer.echo("offsets.json restored from @GENERATOR/state" if found else "no saved offsets: starting from 0")
+
+
 if __name__ == "__main__":
     app()

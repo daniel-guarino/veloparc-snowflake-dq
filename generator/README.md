@@ -32,10 +32,12 @@ These run in GitHub Actions only (ADR 0002), with the secrets and variables of t
 | --- | --- | --- |
 | `kafka-check` | `veloparc-gen kafka-check` | Connects to the broker and the Schema Registry; prints counts only |
 | `kafka-setup` | `veloparc-gen kafka-setup` | Through the Aiven API: creates the 5 Kafka topics (2 partitions, `LogAppendTime`, retention from `topics.yaml`), gives `write` to the generator's user, registers the 4 JSON Schemas as `<topic>-value` (BACKWARD). Idempotent |
+| `generate` | `veloparc-gen backfill` + `veloparc-gen stage-upload` | Generates the history and uploads it to Snowflake: landing files to `@VLP_DP.BRONZE.LANDING` (same `landing/kafka/...` layout), manifests and reference CSVs to `@VLP_DP.BRONZE.GENERATOR`, offsets to `@VLP_DP.BRONZE.GENERATOR/state` |
 | `publish` | `veloparc-gen publish --from --to --countries` | Generates the window and publishes what *arrives* in it. Kafka topics go to Aiven (same key, the 13 headers, `murmur2` partitioning as the Java client, plus producer retries and truncated DLQ copies at the sink rates); file-based topics are written as landing files. Snapshot records (`op R`) are left to the backfill. The anomaly manifest points to the real partition and offset |
 
-Intended use: `make generate` for the history as files (Sep–Oct), then `publish` for the following days through
-Kafka. `--dry-run` simulates the producer locally (also used by the tests).
+Intended use: the `generate` workflow for the history as files (Sep–Oct), then `publish` for the following days
+through Kafka. `publish` restores the offsets from `@GENERATOR/state` first and uploads its file-based topics,
+manifests and offsets afterwards, so the file topics continue where the backfill stopped. `--dry-run` simulates the producer locally (also used by the tests).
 
 ## Output
 

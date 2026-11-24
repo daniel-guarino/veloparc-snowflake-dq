@@ -1,0 +1,77 @@
+# Manual: generate the history (backfill) and upload it to the Snowflake stages (ADR 0003):
+#   landing files -> @VLP_DP.BRONZE.LANDING, manifests and reference -> @VLP_DP.BRONZE.GENERATOR,
+#   offsets -> @VLP_DP.BRONZE.GENERATOR/state (so later `publish` runs continue the file-based topics).
+name: generate
+
+on:
+  workflow_dispatch:
+    inputs:
+      from:
+        description: First day (YYYY-MM-DD)
+        required: true
+        default: "2026-09-01"
+      to:
+        description: Last day (YYYY-MM-DD)
+        required: true
+        default: "2026-10-31"
+      countries:
+        description: Comma-separated country codes
+        required: true
+        default: PT,ES,DE,PL
+      upload:
+        description: Upload to the Snowflake stages (off = generate and keep as artifact only)
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: generate
+  cancel-in-progress: false
+
+jobs:
+  backfill:
+    name: backfill ${{ inputs.from }} to ${{ inputs.to }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: dev
+    env:
+      SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+      SNOWFLAKE_PAT: ${{ secrets.SNOWFLAKE_PAT }}
+      SNOWFLAKE_USER: ${{ vars.SNOWFLAKE_USER || 'SVC_VELOPARC_CI' }}
+      SNOWFLAKE_ROLE: VLP_DEPLOYER
+      SNOWFLAKE_WAREHOUSE: WH_DEPLOY
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - uses: astral-sh/setup-uv@v10.4.0
+        with:
+          enable-cache: true
+
+      - name: Install pinned dependencies
+        run: uv sync --frozen --no-dev
+
+      - name: Generate
+        env:
+          FROM: ${{ inputs.from }}
+          TO: ${{ inputs.to }}
+          COUNTRIES: ${{ inputs.countries }}
+        run: |
+          uv run --no-dev veloparc-gen backfill --from "$FROM" --to "$TO" --countries "$COUNTRIES" \
+            --out out --state-dir state --reset
+
+      - name: Upload to Snowflake stages
+        if: inputs.upload
+        run: uv run --no-dev veloparc-gen stage-upload --out out --state-dir state
+
+      - name: Keep manifests
+        if: always()
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: backfill-${{ inputs.from }}-${{ inputs.to }}-manifests
+          path: |
+            out/_generator/
+            state/
+          if-no-files-found: ignore
+          retention-days: 30
