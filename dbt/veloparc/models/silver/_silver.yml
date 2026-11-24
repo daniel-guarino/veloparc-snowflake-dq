@@ -4,223 +4,762 @@ version: 2
 # Enum checks are warnings: an out-of-contract value is a data quality finding, not a broken pipeline.
 
 models:
-  - name: customer
-    description: Every customer version received; SCD2 in gold uses updated_at as valid_from.
+- name: customer
+  description: Every customer version received; SCD2 in gold uses updated_at as valid_from.
+  data_tests:
+  - unique_combination:
+      arguments:
+        columns:
+        - contact_id
+        - updated_at
+  columns:
+  - name: contact_id
+    description: Customer id (VeloShip ContactID). With updated_at, the key of the version.
     data_tests:
-      - unique_combination:
-          arguments: {columns: [contact_id, updated_at]}
-    columns:
-      - name: contact_id
-        data_tests: [not_null]
-      - name: updated_at
-        data_tests: [not_null]
-      - name: segment
-        data_tests:
-          - accepted_values:
-              arguments: {values: [B2B_SHIPPER, B2C_SHIPPER, MARKETPLACE]}
-              config: {severity: warn}
-
-  - name: depot
-    description: Latest version per depot GLN.
-    columns:
-      - name: gln
-        data_tests: [unique, not_null]
-      - name: depot_type
-        data_tests:
-          - accepted_values:
-              arguments: {values: [HUB, DEPOT, PARCELSHOP, LOCKER]}
-              config: {severity: warn}
-
-  - name: partner
-    description: Latest version per delivery partner.
-    columns:
-      - name: partner_id
-        data_tests: [unique, not_null]
-      - name: base_depot_gln
-        data_tests:
-          - relationships:
-              arguments: {to: ref('depot'), field: gln}
-              config: {severity: warn}
-
-  - name: partner_zone
-    description: Zones served by each partner (latest version).
+    - not_null
+  - name: updated_at
+    description: Version timestamp (UTC). Every version received is kept; gold SCD2 uses it as valid_from.
     data_tests:
-      - unique_combination:
-          arguments: {columns: [partner_id, zone_code]}
-    columns:
-      - name: partner_id
-        data_tests:
-          - not_null
-          - relationships:
-              arguments: {to: ref('partner'), field: partner_id}
-
-  - name: tariff
-    description: Latest version per tariff.
-    columns:
-      - name: tariff_id
-        data_tests: [unique, not_null]
-      - name: contact_id
-        data_tests: [not_null]
-      - name: product
-        data_tests:
-          - accepted_values:
-              arguments: {values: [PARCEL, EXPRESS, FREIGHT]}
-              config: {severity: warn}
-
-  - name: tariff_weight_band
-    description: Weight bands of each tariff (latest version), 1-based band_index.
+    - not_null
+  - name: group_customer_id
+    description: Corporate group the customer belongs to.
+  - name: customer_name
+    description: Customer name, trimmed.
+  - name: country_code
+    description: ISO 3166-1 alpha-2 country of the customer.
+  - name: segment
+    description: B2B_SHIPPER, B2C_SHIPPER or MARKETPLACE.
     data_tests:
-      - unique_combination:
-          arguments: {columns: [tariff_id, band_index]}
-    columns:
-      - name: tariff_id
-        data_tests:
-          - not_null
-          - relationships:
-              arguments: {to: ref('tariff'), field: tariff_id}
-
-  - name: crm_opportunity
-    description: Latest version per CRM opportunity (by LastModifiedDate).
-    columns:
-      - name: opportunity_id
-        data_tests: [unique, not_null]
-      - name: stage
-        data_tests:
-          - accepted_values:
-              arguments: {values: [Prospecting, Qualification, Proposal, Negotiation, Closed Won, Closed Lost]}
-              config: {severity: warn}
-
-  - name: crm_lead
-    description: Latest version per CRM lead; country_code normalized to ISO alpha-2, country_raw as received.
-    columns:
-      - name: lead_id
-        data_tests: [unique, not_null]
-      - name: status
-        data_tests:
-          - accepted_values:
-              arguments: {values: [Open, Working, Qualified, Unqualified, Converted]}
-              config: {severity: warn}
-      - name: lead_source
-        data_tests:
-          - accepted_values:
-              arguments: {values: [Web, Referral, Event, Partner, Outbound]}
-              config: {severity: warn}
-
-  - name: veloship_shipment
-    description: One row per VeloShip shipment message.
-    columns:
-      - name: message_id
-        data_tests: [unique, not_null]
-      - name: contact_id
-        data_tests:
-          - not_null
-          - relationships:
-              arguments: {to: ref('customer'), field: contact_id}
-              config: {severity: warn}
-      - name: product
-        data_tests:
-          - accepted_values:
-              arguments: {values: [PARCEL, EXPRESS, FREIGHT]}
-              config: {severity: warn}
-
-  - name: veloship_parcel
-    description: Request units zipped with response parcels by position; unmatched units or parcels keep NULLs (R1).
+    - accepted_values:
+        arguments:
+          values:
+          - B2B_SHIPPER
+          - B2C_SHIPPER
+          - MARKETPLACE
+        config:
+          severity: warn
+  - name: vat_number
+    description: 'VAT number without spaces, upper-case. R15: prefix = country_code.'
+  - name: _event_id
+    description: '{{ doc(''col__event_id'') }}'
+  - name: _source_ts
+    description: '{{ doc(''col__source_ts'') }}'
+  - name: _kafka_ts
+    description: '{{ doc(''col__kafka_ts'') }}'
+  - name: _source_txn_id
+    description: '{{ doc(''col__source_txn_id'') }}'
+  - name: _kafka_offset
+    description: '{{ doc(''col__kafka_offset'') }}'
+  - name: _file_name
+    description: '{{ doc(''col__file_name'') }}'
+  - name: _loaded_at
+    description: '{{ doc(''col__loaded_at'') }}'
+  - name: _inserted_at
+    description: '{{ doc(''col__inserted_at'') }}'
+- name: depot
+  description: Latest version per depot GLN.
+  columns:
+  - name: gln
+    description: 13-digit GS1 Global Location Number of the depot (R15 check digit).
     data_tests:
-      - unique_combination:
-          arguments: {columns: [message_id, unit_index]}
-    columns:
-      - name: track_id
-        data_tests:
-          - unique
-          - not_null:
-              config: {severity: warn}
-      - name: message_id
-        data_tests:
-          - relationships:
-              arguments: {to: ref('veloship_shipment'), field: message_id}
-
-  - name: tracking_event
-    description: One row per scan event; business duplicates and late records are kept for the DQ tests.
-    columns:
-      - name: event_id
-        data_tests: [unique, not_null]
-      - name: track_id
-        data_tests:
-          - not_null
-          - relationships:
-              arguments: {to: ref('veloship_parcel'), field: track_id}
-              config: {severity: warn}
-      - name: status
-        data_tests:
-          - accepted_values:
-              arguments:
-                values: [DATA_RECEIVED, PICKUP, HUB, IN_DELIVERY, DELIVERED, CANCELLED, NOT_DELIVERED, PARCELSHOP]
-              config: {severity: warn}
-      - name: event_time_utc
-        data_tests:
-          - not_null:
-              config: {severity: warn}
-
-  - name: invoice
-    description: One row per invoice or credit note (latest version), with related_invoice_number (gap #1).
-    columns:
-      - name: invoice_number
-        data_tests: [unique, not_null]
-      - name: doc_type
-        data_tests:
-          - accepted_values:
-              arguments: {values: [INVOICE, CREDIT_NOTE]}
-              config: {severity: warn}
-      - name: contact_id
-        data_tests:
-          - not_null
-          - relationships:
-              arguments: {to: ref('customer'), field: contact_id}
-              config: {severity: warn}
-
-  - name: invoice_line
-    description: Lines of each invoice's latest version.
+    - unique
+    - not_null
+  - name: depot_name
+    description: Depot name.
+  - name: depot_type
+    description: HUB, DEPOT, PARCELSHOP or LOCKER.
     data_tests:
-      - unique_combination:
-          arguments: {columns: [invoice_number, line_no]}
-    columns:
-      - name: invoice_number
-        data_tests:
-          - relationships:
-              arguments: {to: ref('invoice'), field: invoice_number}
-
-  - name: invoice_surcharge
-    description: Surcharges of each invoice line, 1-based surcharge_index.
+    - accepted_values:
+        arguments:
+          values:
+          - HUB
+          - DEPOT
+          - PARCELSHOP
+          - LOCKER
+        config:
+          severity: warn
+  - name: country_code
+    description: ISO alpha-2 country.
+  - name: city
+    description: City.
+  - name: postal_code
+    description: Postal code.
+  - name: _event_id
+    description: '{{ doc(''col__event_id'') }}'
+  - name: _source_ts
+    description: '{{ doc(''col__source_ts'') }}'
+  - name: _kafka_ts
+    description: '{{ doc(''col__kafka_ts'') }}'
+  - name: _source_txn_id
+    description: '{{ doc(''col__source_txn_id'') }}'
+  - name: _kafka_offset
+    description: '{{ doc(''col__kafka_offset'') }}'
+  - name: _file_name
+    description: '{{ doc(''col__file_name'') }}'
+  - name: _loaded_at
+    description: '{{ doc(''col__loaded_at'') }}'
+  - name: _inserted_at
+    description: '{{ doc(''col__inserted_at'') }}'
+- name: partner
+  description: Latest version per delivery partner.
+  columns:
+  - name: partner_id
+    description: Last-mile delivery partner id.
     data_tests:
-      - unique_combination:
-          arguments: {columns: [invoice_number, line_no, surcharge_index]}
-    columns:
-      - name: surcharge_type
-        data_tests:
-          - accepted_values:
-              arguments: {values: [FUEL, PEAK, TOLL, REMOTE_AREA]}
-              config: {severity: warn}
-
-  - name: partner_settlement
-    description: One row per monthly partner settlement (latest version).
-    columns:
-      - name: settlement_id
-        data_tests: [unique, not_null]
-      - name: partner_id
-        data_tests:
-          - not_null
-          - relationships:
-              arguments: {to: ref('partner'), field: partner_id}
-              config: {severity: warn}
-
-  - name: gl_balance
-    description: GL balances from the latest complete batch per company and period.
+    - unique
+    - not_null
+  - name: partner_name
+    description: Partner name.
+  - name: country_code
+    description: ISO alpha-2 country.
+  - name: base_depot_gln
+    description: GLN of the partner's base depot (must exist in depot).
     data_tests:
-      - unique_combination:
-          arguments: {columns: [company_code, period, gl_account]}
-    columns:
-      - name: account_name
-        data_tests:
-          - accepted_values:
-              arguments: {values: [Parcel revenue domestic, Parcel revenue international, Revenue adjustments]}
-              config: {severity: warn}
+    - relationships:
+        arguments:
+          to: ref('depot')
+          field: gln
+        config:
+          severity: warn
+  - name: _event_id
+    description: '{{ doc(''col__event_id'') }}'
+  - name: _source_ts
+    description: '{{ doc(''col__source_ts'') }}'
+  - name: _kafka_ts
+    description: '{{ doc(''col__kafka_ts'') }}'
+  - name: _source_txn_id
+    description: '{{ doc(''col__source_txn_id'') }}'
+  - name: _kafka_offset
+    description: '{{ doc(''col__kafka_offset'') }}'
+  - name: _file_name
+    description: '{{ doc(''col__file_name'') }}'
+  - name: _loaded_at
+    description: '{{ doc(''col__loaded_at'') }}'
+  - name: _inserted_at
+    description: '{{ doc(''col__inserted_at'') }}'
+- name: partner_zone
+  description: Zones served by each partner (latest version).
+  data_tests:
+  - unique_combination:
+      arguments:
+        columns:
+        - partner_id
+        - zone_code
+  columns:
+  - name: partner_id
+    description: Partner id.
+    data_tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('partner')
+          field: partner_id
+  - name: zone_code
+    description: 'Delivery zone served by the partner (R16: one partner per zone).'
+  - name: _event_id
+    description: '{{ doc(''col__event_id'') }}'
+  - name: _inserted_at
+    description: '{{ doc(''col__inserted_at'') }}'
+- name: tariff
+  description: Latest version per tariff.
+  columns:
+  - name: tariff_id
+    description: Tariff id (latest version).
+    data_tests:
+    - unique
+    - not_null
+  - name: contact_id
+    description: Customer the tariff belongs to.
+    data_tests:
+    - not_null
+  - name: product
+    description: PARCEL, EXPRESS or FREIGHT.
+    data_tests:
+    - accepted_values:
+        arguments:
+          values:
+          - PARCEL
+          - EXPRESS
+          - FREIGHT
+        config:
+          severity: warn
+  - name: zone_code
+    description: Delivery zone the tariff applies to.
+  - name: currency
+    description: Tariff currency.
+  - name: fuel_surcharge_pct
+    description: Fuel surcharge in percentage points (12.5 = 12.5%). R8.
+  - name: valid_from
+    description: 'First day of validity. R14: no overlap per (contact, product, zone).'
+  - name: valid_to
+    description: Last day of validity; NULL = open-ended.
+  - name: _event_id
+    description: '{{ doc(''col__event_id'') }}'
+  - name: _source_ts
+    description: '{{ doc(''col__source_ts'') }}'
+  - name: _kafka_ts
+    description: '{{ doc(''col__kafka_ts'') }}'
+  - name: _source_txn_id
+    description: '{{ doc(''col__source_txn_id'') }}'
+  - name: _kafka_offset
+    description: '{{ doc(''col__kafka_offset'') }}'
+  - name: _file_name
+    description: '{{ doc(''col__file_name'') }}'
+  - name: _loaded_at
+    description: '{{ doc(''col__loaded_at'') }}'
+  - name: _inserted_at
+    description: '{{ doc(''col__inserted_at'') }}'
+- name: tariff_weight_band
+  description: Weight bands of each tariff (latest version), 1-based band_index.
+  data_tests:
+  - unique_combination:
+      arguments:
+        columns:
+        - tariff_id
+        - band_index
+  columns:
+  - name: tariff_id
+    description: Tariff id.
+    data_tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('tariff')
+          field: tariff_id
+  - name: band_index
+    description: 1-based position of the band in the tariff.
+  - name: from_kg
+    description: Lower bound (exclusive, except 0 for the first band).
+  - name: to_kg
+    description: 'Upper bound (inclusive). R14: contiguous bands.'
+  - name: price
+    description: Band price in the tariff currency.
+  - name: _event_id
+    description: '{{ doc(''col__event_id'') }}'
+  - name: _inserted_at
+    description: '{{ doc(''col__inserted_at'') }}'
+- name: crm_opportunity
+  description: Latest version per CRM opportunity (by LastModifiedDate).
+  columns:
+  - name: opportunity_id
+    description: CRM opportunity id (latest version).
+    data_tests:
+    - unique
+    - not_null
+  - name: account_id
+    description: CRM account id.
+  - name: contact_id
+    description: Customer id once the opportunity is linked to one; NULL before.
+  - name: opportunity_name
+    description: Opportunity name.
+  - name: stage
+    description: Sales stage (Prospecting ... Closed Won / Closed Lost).
+    data_tests:
+    - accepted_values:
+        arguments:
+          values:
+          - Prospecting
+          - Qualification
+          - Proposal
+          - Negotiation
+          - Closed Won
+          - Closed Lost
+        config:
+          severity: warn
+  - name: amount
+    description: Expected amount in the opportunity currency.
+  - name: currency
+    description: ISO currency.
+  - name: close_date
+    description: Expected or actual close date.
+  - name: country_code
+    description: ISO alpha-2 country.
+  - name: expected_parcels_month
+    description: Expected parcels per month.
+  - name: last_modified_at
+    description: Last CRM modification, UTC (Salesforce offset without colon parsed). Version order.
+  - name: _event_id
+    description: '{{ doc(''col__event_id'') }}'
+  - name: _source_ts
+    description: '{{ doc(''col__source_ts'') }}'
+  - name: _kafka_ts
+    description: '{{ doc(''col__kafka_ts'') }}'
+  - name: _source_txn_id
+    description: '{{ doc(''col__source_txn_id'') }}'
+  - name: _kafka_offset
+    description: '{{ doc(''col__kafka_offset'') }}'
+  - name: _file_name
+    description: '{{ doc(''col__file_name'') }}'
+  - name: _loaded_at
+    description: '{{ doc(''col__loaded_at'') }}'
+  - name: _inserted_at
+    description: '{{ doc(''col__inserted_at'') }}'
+- name: crm_lead
+  description: Latest version per CRM lead; country_code normalized to ISO alpha-2, country_raw as received.
+  columns:
+  - name: lead_id
+    description: CRM lead id (latest version).
+    data_tests:
+    - unique
+    - not_null
+  - name: company_name
+    description: Company name.
+  - name: country_raw
+    description: Country exactly as received.
+  - name: country_code
+    description: 'ISO alpha-2: the raw value when it has 2 letters, else REF.COUNTRY_ALIAS; NULL if unresolved.'
+  - name: lead_source
+    description: Web, Referral, Event, Partner or Outbound.
+    data_tests:
+    - accepted_values:
+        arguments:
+          values:
+          - Web
+          - Referral
+          - Event
+          - Partner
+          - Outbound
+        config:
+          severity: warn
+  - name: status
+    description: Open, Working, Qualified, Unqualified or Converted.
+    data_tests:
+    - accepted_values:
+        arguments:
+          values:
+          - Open
+          - Working
+          - Qualified
+          - Unqualified
+          - Converted
+        config:
+          severity: warn
+  - name: converted_opportunity_id
+    description: Opportunity the lead was converted into.
+  - name: created_at
+    description: Lead creation, UTC.
+  - name: _event_id
+    description: '{{ doc(''col__event_id'') }}'
+  - name: _source_ts
+    description: '{{ doc(''col__source_ts'') }}'
+  - name: _kafka_ts
+    description: '{{ doc(''col__kafka_ts'') }}'
+  - name: _source_txn_id
+    description: '{{ doc(''col__source_txn_id'') }}'
+  - name: _kafka_offset
+    description: '{{ doc(''col__kafka_offset'') }}'
+  - name: _file_name
+    description: '{{ doc(''col__file_name'') }}'
+  - name: _loaded_at
+    description: '{{ doc(''col__loaded_at'') }}'
+  - name: _inserted_at
+    description: '{{ doc(''col__inserted_at'') }}'
+- name: veloship_shipment
+  description: One row per VeloShip shipment message.
+  columns:
+  - name: message_id
+    description: VeloShip API message id (one shipment request/response).
+    data_tests:
+    - unique
+    - not_null
+  - name: shipment_reference
+    description: Shipment references, pipe-delimited.
+  - name: shipping_date
+    description: Shipping date requested by the shipper.
+  - name: incoterm_code
+    description: Incoterm code (kept as text).
+  - name: product
+    description: PARCEL, EXPRESS or FREIGHT.
+    data_tests:
+    - accepted_values:
+        arguments:
+          values:
+          - PARCEL
+          - EXPRESS
+          - FREIGHT
+        config:
+          severity: warn
+  - name: middleware
+    description: Integration channel.
+  - name: contact_id
+    description: Shipper (customer) id.
+    data_tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('customer')
+          field: contact_id
+        config:
+          severity: warn
+  - name: consignee_id
+    description: Consignee id, when sent.
+  - name: consignee_name
+    description: Consignee name (PII).
+  - name: consignee_country
+    description: Consignee ISO alpha-2 country.
+  - name: consignee_zip
+    description: Consignee postal code.
+  - name: consignee_city
+    description: Consignee city.
+  - name: received_at
+    description: When the API received the request, UTC.
+  - name: _event_id
+    description: '{{ doc(''col__event_id'') }}'
+  - name: _source_ts
+    description: '{{ doc(''col__source_ts'') }}'
+  - name: _kafka_ts
+    description: '{{ doc(''col__kafka_ts'') }}'
+  - name: _source_txn_id
+    description: '{{ doc(''col__source_txn_id'') }}'
+  - name: _kafka_offset
+    description: '{{ doc(''col__kafka_offset'') }}'
+  - name: _file_name
+    description: '{{ doc(''col__file_name'') }}'
+  - name: _loaded_at
+    description: '{{ doc(''col__loaded_at'') }}'
+  - name: _inserted_at
+    description: '{{ doc(''col__inserted_at'') }}'
+- name: veloship_parcel
+  description: Request units zipped with response parcels by position; unmatched units or parcels keep NULLs (R1).
+  data_tests:
+  - unique_combination:
+      arguments:
+        columns:
+        - message_id
+        - unit_index
+  columns:
+  - name: message_id
+    description: Shipment message id.
+    data_tests:
+    - relationships:
+        arguments:
+          to: ref('veloship_shipment')
+          field: message_id
+  - name: unit_index
+    description: 1-based position of the unit in the request (zip key with the response).
+  - name: track_id
+    description: Parcel TrackID from the response; NULL when the request has more units than the response (R1).
+    data_tests:
+    - unique
+    - not_null:
+        config:
+          severity: warn
+  - name: shipment_unit_reference
+    description: Unit references, pipe-delimited.
+  - name: parcel_number
+    description: Parcel number (text, leading zeros kept).
+  - name: sscc
+    description: 18-digit SSCC of the parcel.
+  - name: weight_kg
+    description: Declared weight, 2 decimals.
+  - name: services
+    description: Array of requested service names.
+  - name: is_matched
+    description: TRUE when the unit and the parcel both exist at this position.
+  - name: _event_id
+    description: '{{ doc(''col__event_id'') }}'
+  - name: _inserted_at
+    description: '{{ doc(''col__inserted_at'') }}'
+- name: tracking_event
+  description: One row per scan event; business duplicates and late records are kept for the DQ tests.
+  columns:
+  - name: event_id
+    description: Scan event id.
+    data_tests:
+    - unique
+    - not_null
+  - name: event_type
+    description: Always ObjectEvent.
+  - name: track_id
+    description: Parcel TrackID.
+    data_tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('veloship_parcel')
+          field: track_id
+        config:
+          severity: warn
+  - name: sscc
+    description: 18-digit SSCC rebuilt from the EPC URN (check digit computed).
+  - name: status
+    description: Scan status (DATA_RECEIVED ... DELIVERED).
+    data_tests:
+    - accepted_values:
+        arguments:
+          values:
+          - DATA_RECEIVED
+          - PICKUP
+          - HUB
+          - IN_DELIVERY
+          - DELIVERED
+          - CANCELLED
+          - NOT_DELIVERED
+          - PARCELSHOP
+        config:
+          severity: warn
+  - name: biz_step
+    description: CBV business step without the URN prefix.
+  - name: event_time_utc
+    description: Scan time, UTC.
+    data_tests:
+    - not_null:
+        config:
+          severity: warn
+  - name: event_tz_offset
+    description: Original offset of the scan time ('+01:00' or 'Z').
+  - name: record_time_utc
+    description: 'When the system recorded the scan, UTC (R5: >= event_time_utc).'
+  - name: location_gln
+    description: GLN where the scan happened (R6, R15).
+  - name: location_name
+    description: Location name as sent.
+  - name: reason_code
+    description: Reason for NOT_DELIVERED.
+  - name: scanner_id
+    description: Scanner device id.
+  - name: _event_id
+    description: '{{ doc(''col__event_id'') }}'
+  - name: _source_ts
+    description: '{{ doc(''col__source_ts'') }}'
+  - name: _kafka_ts
+    description: '{{ doc(''col__kafka_ts'') }}'
+  - name: _source_txn_id
+    description: '{{ doc(''col__source_txn_id'') }}'
+  - name: _kafka_offset
+    description: '{{ doc(''col__kafka_offset'') }}'
+  - name: _file_name
+    description: '{{ doc(''col__file_name'') }}'
+  - name: _loaded_at
+    description: '{{ doc(''col__loaded_at'') }}'
+  - name: _inserted_at
+    description: '{{ doc(''col__inserted_at'') }}'
+- name: invoice
+  description: One row per invoice or credit note (latest version), with related_invoice_number (gap
+  columns:
+  - name: invoice_number
+    description: Invoice or credit note number; the 2-letter prefix is the issuing company's country.
+    data_tests:
+    - unique
+    - not_null
+  - name: doc_type
+    description: 'INVOICE or CREDIT_NOTE (R9: credit notes negative).'
+    data_tests:
+    - accepted_values:
+        arguments:
+          values:
+          - INVOICE
+          - CREDIT_NOTE
+        config:
+          severity: warn
+  - name: issue_date
+    description: 'Issue date (R10: FX rate of this date).'
+  - name: billing_period
+    description: Billed month, YYYY-MM.
+  - name: related_invoice_number
+    description: Invoice a credit note corrects (R9).
+  - name: contact_id
+    description: Customer id.
+    data_tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('customer')
+          field: contact_id
+        config:
+          severity: warn
+  - name: vat_number
+    description: Customer VAT number, normalised.
+  - name: currency
+    description: Invoice currency.
+  - name: fx_rate_to_eur
+    description: EUR per unit of the invoice currency.
+  - name: total_net
+    description: 'Net total (R7: = sum of lines).'
+  - name: total_vat
+    description: VAT total.
+  - name: total_gross
+    description: 'Gross total (R7: = net + vat).'
+  - name: _event_id
+    description: '{{ doc(''col__event_id'') }}'
+  - name: _source_ts
+    description: '{{ doc(''col__source_ts'') }}'
+  - name: _kafka_ts
+    description: '{{ doc(''col__kafka_ts'') }}'
+  - name: _source_txn_id
+    description: '{{ doc(''col__source_txn_id'') }}'
+  - name: _kafka_offset
+    description: '{{ doc(''col__kafka_offset'') }}'
+  - name: _file_name
+    description: '{{ doc(''col__file_name'') }}'
+  - name: _loaded_at
+    description: '{{ doc(''col__loaded_at'') }}'
+  - name: _inserted_at
+    description: '{{ doc(''col__inserted_at'') }}'
+- name: invoice_line
+  description: Lines of each invoice's latest version.
+  data_tests:
+  - unique_combination:
+      arguments:
+        columns:
+        - invoice_number
+        - line_no
+  columns:
+  - name: invoice_number
+    description: Invoice number.
+    data_tests:
+    - relationships:
+        arguments:
+          to: ref('invoice')
+          field: invoice_number
+  - name: line_no
+    description: Line number within the invoice.
+  - name: track_id
+    description: Invoiced parcel (R2).
+  - name: tariff_id
+    description: Tariff applied (R8).
+  - name: product
+    description: Product.
+  - name: weight_kg
+    description: Billed weight.
+  - name: zone_code
+    description: Billed zone.
+  - name: base_price
+    description: Band price (R8).
+  - name: net_amount
+    description: Base price + surcharges (R7).
+  - name: _event_id
+    description: '{{ doc(''col__event_id'') }}'
+  - name: _inserted_at
+    description: '{{ doc(''col__inserted_at'') }}'
+- name: invoice_surcharge
+  description: Surcharges of each invoice line, 1-based surcharge_index.
+  data_tests:
+  - unique_combination:
+      arguments:
+        columns:
+        - invoice_number
+        - line_no
+        - surcharge_index
+  columns:
+  - name: invoice_number
+    description: Invoice number.
+  - name: line_no
+    description: Line number.
+  - name: surcharge_index
+    description: 1-based position within the line.
+  - name: surcharge_type
+    description: FUEL, PEAK, TOLL or REMOTE_AREA.
+    data_tests:
+    - accepted_values:
+        arguments:
+          values:
+          - FUEL
+          - PEAK
+          - TOLL
+          - REMOTE_AREA
+        config:
+          severity: warn
+  - name: amount
+    description: 'Surcharge amount (R8: FUEL = base x fuel %).'
+  - name: _event_id
+    description: '{{ doc(''col__event_id'') }}'
+  - name: _inserted_at
+    description: '{{ doc(''col__inserted_at'') }}'
+- name: partner_settlement
+  description: One row per monthly partner settlement (latest version).
+  columns:
+  - name: settlement_id
+    description: Settlement id (partner x zone x month).
+    data_tests:
+    - unique
+    - not_null
+  - name: partner_id
+    description: Partner id.
+    data_tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('partner')
+          field: partner_id
+        config:
+          severity: warn
+  - name: zone_code
+    description: Zone.
+  - name: period
+    description: Month, YYYY-MM.
+  - name: currency
+    description: Settlement currency.
+  - name: stops
+    description: 'Stops made (R12: <= delivered_parcels).'
+  - name: delivered_parcels
+    description: Parcels the partner declares delivered (R11).
+  - name: failed_attempts
+    description: Failed delivery attempts.
+  - name: cost_per_stop
+    description: Cost per stop.
+  - name: total_cost
+    description: 'Total cost (R12: = stops x cost_per_stop).'
+  - name: _event_id
+    description: '{{ doc(''col__event_id'') }}'
+  - name: _source_ts
+    description: '{{ doc(''col__source_ts'') }}'
+  - name: _kafka_ts
+    description: '{{ doc(''col__kafka_ts'') }}'
+  - name: _source_txn_id
+    description: '{{ doc(''col__source_txn_id'') }}'
+  - name: _kafka_offset
+    description: '{{ doc(''col__kafka_offset'') }}'
+  - name: _file_name
+    description: '{{ doc(''col__file_name'') }}'
+  - name: _loaded_at
+    description: '{{ doc(''col__loaded_at'') }}'
+  - name: _inserted_at
+    description: '{{ doc(''col__inserted_at'') }}'
+- name: gl_balance
+  description: GL balances from the latest complete batch per company and period.
+  data_tests:
+  - unique_combination:
+      arguments:
+        columns:
+        - company_code
+        - period
+        - gl_account
+  columns:
+  - name: company_code
+    description: Veloparc company (VLP_XX).
+  - name: country_code
+    description: Company country.
+  - name: period
+    description: Month, YYYY-MM.
+  - name: gl_account
+    description: GL account.
+  - name: account_name
+    description: Revenue account name.
+    data_tests:
+    - accepted_values:
+        arguments:
+          values:
+          - Parcel revenue domestic
+          - Parcel revenue international
+          - Revenue adjustments
+        config:
+          severity: warn
+  - name: amount_eur
+    description: Balance in EUR (R13 target).
+  - name: batch_id
+    description: GL batch the rows come from (the latest complete one).
+  - name: _event_id
+    description: '{{ doc(''col__event_id'') }}'
+  - name: _source_ts
+    description: '{{ doc(''col__source_ts'') }}'
+  - name: _kafka_ts
+    description: '{{ doc(''col__kafka_ts'') }}'
+  - name: _kafka_offset
+    description: '{{ doc(''col__kafka_offset'') }}'
+  - name: _file_name
+    description: '{{ doc(''col__file_name'') }}'
+  - name: _loaded_at
+    description: '{{ doc(''col__loaded_at'') }}'
+  - name: _inserted_at
+    description: '{{ doc(''col__inserted_at'') }}'
