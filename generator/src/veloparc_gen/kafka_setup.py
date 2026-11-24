@@ -44,7 +44,7 @@ def replication_for(service: dict) -> int:
     return max(1, min(3, int(service.get("node_count") or 1)))
 
 
-_POLICY = re.compile(r"([a-z][a-z0-9.]*) must be (\d+)")
+_POLICY = re.compile(r"([a-z][a-z0-9._]*) must be ([A-Za-z0-9_,]+)")
 
 
 def _apply_policy(api_call, config: dict, log) -> dict:
@@ -59,7 +59,8 @@ def _apply_policy(api_call, config: dict, log) -> dict:
             match = _POLICY.search(str(exc))
             if "kafka_policy_violation" not in str(exc) or not match:
                 raise
-            key, value = match.group(1).replace(".", "_"), int(match.group(2))
+            raw = match.group(2)
+            key, value = match.group(1).replace(".", "_"), int(raw) if raw.isdigit() else raw
             if config.get(key) == value:
                 raise
             log(f"  plan policy: {key} {config.get(key)} -> {value}")
