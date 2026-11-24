@@ -64,8 +64,14 @@ class AivenApi:
         return {t["topic_name"]: t for t in self._call("GET", f"{self.base}/topic", None).get("topics", [])}
 
     def create_topic(self, name: str, partitions: int, replication: int, config: dict) -> None:
-        body = {"topic_name": name, "partitions": partitions, "replication": replication, "config": config}
+        body: dict = {"topic_name": name, "partitions": partitions, "replication": replication}
+        if config:
+            body["config"] = config
         self._call("POST", f"{self.base}/topic", body)
+
+    def update_service_config(self, user_config: dict) -> None:
+        """Advanced configuration of the service (only the keys given are changed)."""
+        self._call("PUT", self.base, {"user_config": user_config})
 
     def update_topic(self, name: str, partitions: int, config: dict) -> None:
         self._call("PUT", f"{self.base}/topic/{name}", {"partitions": partitions, "config": config})

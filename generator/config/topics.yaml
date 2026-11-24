@@ -3,7 +3,9 @@
 # Aiven Snowflake sink; file = extract uploaded to the internal stage @BRONZE.LANDING in the S3 Sink layout.
 # The backfill writes every topic as files, in that layout and envelope; `publish` sends kafka topics to Aiven.
 # `partitions` is the effective count used by the partitioner (Aiven: 2 for kafka topics).
-# cleanup_policy / retention_hours / max_message_bytes are applied to kafka topics by `veloparc-gen kafka-setup`.
+# cleanup_policy / retention_hours / max_message_bytes are applied to kafka topics by `veloparc-gen kafka-setup`
+# on Professional plans. On the Aiven Developer/Free tiers the plan fixes them (retention 1-3 days, replication 1)
+# and refuses custom topic configs, so topics get the plan defaults and LogAppendTime is set at service level.
 topics:
   veloship_shipment:
     name: vlp.shipping.veloship-shipment.v1
