@@ -76,7 +76,7 @@ table dim_date
 		mode: import
 		source =
 				let
-				    Source = fnVeloparcTable("GOLD", "DIM_DATE", {{"date_key", Int64.Type}, {"full_date", type date}, {"year", Int64.Type}, {"month", Int64.Type}, {"period", type text}, {"iso_week", Int64.Type}, {"is_weekend", type logical}})
+				    Source = fnVeloparcTable("GOLD", "DIM_DATE", {{"date_key", Int64.Type}, {"full_date", type date}, {"year", Int64.Type}, {"month", Int64.Type}, {"period", type text}, {"iso_week", Int64.Type}, {"is_weekend", type logical}}),
 				    Known = Table.SelectRows(Source, each [date_key] <> -1)
 				in
 				    Known
